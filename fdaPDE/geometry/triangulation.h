@@ -30,6 +30,17 @@
 #include "utils.h"
 
 namespace fdapde {
+
+template <typename V, typename W> std::unordered_map<V, W> reverse(const std::unordered_map<W, V>& in) {
+    std::unordered_map<V, W> out;
+    for (const auto& [key, value] : in) {
+        fdapde_assert(
+          out.find(value) == out.end());   // if this is not passed, in is not a bijection, cannot be inverted
+        out[value] = key;
+    }
+    return out;
+}
+
 namespace core {
 
 template <int M, int N> class Triangulation;
@@ -435,6 +446,8 @@ template <> class Triangulation<3, 3> : public TriangulationBase<3, 3, Triangula
         face_iterator(int index, const Triangulation* mesh) :
             iterator<face_iterator, FaceType>(index, 0, mesh->n_faces_, mesh) { }
     };
+    face_iterator faces_begin() const { return face_iterator(0, this); }
+    face_iterator faces_end() const { return face_iterator(n_faces_, this); }
     // iterator over boundary faces
     struct boundary_face_iterator : public face_iterator {
         boundary_face_iterator(int index, const Triangulation* mesh) :
@@ -443,12 +456,15 @@ template <> class Triangulation<3, 3> : public TriangulationBase<3, 3, Triangula
     boundary_face_iterator boundary_faces_begin() const { return boundary_face_iterator(0, this); }
     boundary_face_iterator boundary_faces_end() const { return boundary_face_iterator(n_faces_, this); }
 
-    // provides the surface triangular mesh of this 3D triangulation
-    Triangulation<2, 3> surface() const {
+    struct SurfaceReturnType {
+        Triangulation<2, 3> triangulation;
+        std::unordered_map<int, int> node_map;
+    };
+    
+    SurfaceReturnType surface() const {
         DMatrix<double> nodes(n_boundary_nodes(), FaceType::n_nodes);
         DMatrix<int> cells(n_boundary_faces(), FaceType::n_nodes), boundary(n_boundary_nodes(), 1);
         std::unordered_map<int, int> node_map;   // bounds node ids in the 3D mesh to rescaled ids on the surface mesh
-
         // compute nodes, cells and boundary matrices
         int i = 0, j = 0;
         for (boundary_face_iterator it = boundary_faces_begin(); it != boundary_faces_end(); ++it) {
@@ -467,8 +483,35 @@ template <> class Triangulation<3, 3> : public TriangulationBase<3, 3, Triangula
             }
 	    i++;
         }
-	return Triangulation<2, 3>(nodes, cells, boundary);
+	return {Triangulation<2, 3>(nodes, cells, boundary), fdapde::reverse(node_map)};
     }
+
+    // provides the surface triangular mesh of this 3D triangulation
+    //Triangulation<2, 3> surface() const {
+    //    DMatrix<double> nodes(n_boundary_nodes(), FaceType::n_nodes);
+    //    DMatrix<int> cells(n_boundary_faces(), FaceType::n_nodes), boundary(n_boundary_nodes(), 1);
+    //    std::unordered_map<int, int> node_map;   // bounds node ids in the 3D mesh to rescaled ids on the surface mesh
+
+    //    // compute nodes, cells and boundary matrices
+    //    int i = 0, j = 0;
+    //    for (boundary_face_iterator it = boundary_faces_begin(); it != boundary_faces_end(); ++it) {
+    //        DVector<int> face_nodes = it->node_ids();
+    //        for (int k = 0; k < FaceType::n_nodes; ++k) {
+    //            int node_id = face_nodes[k];
+    //            if (node_map.find(node_id) != node_map.end()) {
+    //                cells(i, k) = node_map[node_id];
+    //            } else {
+    //                nodes.row(j) = nodes_.row(node_id);
+    //		    boundary(j, 0) = is_node_on_boundary(node_id);
+    //                cells(i, k) = j;
+    //   	    node_map[node_id] = j;
+    //		    j++;
+    //            }
+    //        }
+    //	    i++;
+    //    }
+    //	return Triangulation<2, 3>(nodes, cells, boundary);
+    //}
 
     // point location
     DVector<int> locate(const DMatrix<double>& points) const {

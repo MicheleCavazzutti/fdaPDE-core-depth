@@ -61,6 +61,7 @@ template <typename Triangulation> class Triangle : public Simplex<Triangulation:
     DVector<int> neighbors() const { return mesh_->neighbors().row(id_); }
     DVector<int> node_ids() const { return mesh_->cells().row(id_); }
     bool on_boundary() const { return boundary_; }
+    DVector<int> edge_ids() const { return mesh_->cell_to_edges().row(id_); }
     operator bool() const { return mesh_ != nullptr; }
     EdgeType edge(int n) const {
         fdapde_assert(n < this->n_edges);
