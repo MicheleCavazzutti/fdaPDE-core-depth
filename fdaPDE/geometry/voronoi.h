@@ -71,7 +71,7 @@ namespace fdapde {
       class ConvexPolygon{
       public:
 	ConvexPolygon()=default;
-	ConvexPolygon(Triangulation<2,3>::cell_iterator face, const DMatrix<double> & nodes_ , std::unordered_map<int,int> surface_to_mesh){
+	ConvexPolygon(Triangulation<2,3>::cell_iterator face, const DMatrix<double> & nodes_ , std::unordered_map<int,int> surface_to_mesh, SVector<3> tet_mean){
 	  // NOTE: should take an iterator
 	  // To be implemented, ask Palummo; Main problem is to retrieve the adiacent polygons information on the surface!! INDEED WE CAN DO THIS USIG THE SURFACE METHOD; NO MORE!!, simply will be referred to the tringles of the sruface (the methods that will use this need to take this into account) (We will also need a transformation to internal map at the end, since the closeness is local)
 	  // I need to deepen more this prolem
@@ -79,12 +79,10 @@ namespace fdapde {
 	  // Build the list of points
 	  std::vector<SVector<3>> points;
 	  std::vector<UInt> adiacent_faces;
-      
-	  DVector<int> edges = face->edge_ids();
 	  
 	  // manual insertion
-	  for(auto i=0; i<edges.size(); i++){ // WRONG
-	    auto edge = face->edge(edges[i]);
+	  for(auto i=0; i<3; i++){ // WRONG
+	    auto edge = face->edge(i);
 	    auto neighbors  = edge.adjacent_cells(); 
 	    for(auto neigh : neighbors){
 	      if(neigh != face->id()){
@@ -94,9 +92,9 @@ namespace fdapde {
 	    //adiacent_faces.push_back(-1-neigh); // Negative index to comply with notation of ConvexPolygons
 	  }
 	    
-	  UInt p0 = surface_to_mesh[face->node_ids()[0]];
-	  UInt p1 = surface_to_mesh[face->node_ids()[1]];
-	  UInt p2 = surface_to_mesh[face->node_ids()[2]];
+	  UInt p0 = surface_to_mesh.at(face->node_ids()[0]);
+	  UInt p1 = surface_to_mesh.at(face->node_ids()[1]);
+	  UInt p2 = surface_to_mesh.at(face->node_ids()[2]);
       
 	  //iter++;
 	  
@@ -112,32 +110,43 @@ namespace fdapde {
 	  SVector<3> v1 = nodes_.row(p1)-nodes_.row(p0);
 	  SVector<3> v2 = nodes_.row(p2)-nodes_.row(p0);
 	  
-	  
-	  if((v1.cross(v2)).dot(face->normal())<0){ // Hoping normal is oriented right, as it should be  CHECK
+	  if((v1.cross(v2)).dot(tet_mean - face->supporting_plane().project(tet_mean))<0){ // I use the tetrahedron mean to avoid the possible wrong ordering of the normal of the supporting_plane
 	    std::reverse(points.begin(), points.end());
 	    std::reverse(adiacent_faces.begin(), adiacent_faces.end());
 	  }
-	  
-	  
+	 
 	  this->points_ = points;
 	  this->adiacent_polygons_ = adiacent_faces;
 	  this->adiacent_cell_ = -1;
+	  this->closed_=true;
+	  SVector<3> mean = points_[0];
+	  UInt den =this->points_.size(); 
+
+	  for(auto i = 1; i<this->points_.size(); i++){
+	    mean = mean + this->points_[i];
+	  }
+	  // Build the centroid
+	  this->centroid_ = mean/den;
 
 	  // RECHEK HERE
 	}
 	void set_points(std::vector<SVector<3>> set_points){
-	  points_ = set_points;
+	  this->points_ = set_points;
+	  
+	  if(set_points.size() > 0){
 	  UInt den = set_points.size();
-	  SVector<3> mean;
+	  SVector<3> mean = set_points[0];
 
-	  for(auto i = 0; i<set_points.size(); i++){
-	    mean = mean + points_[i];
+	  for(auto i = 1; i<set_points.size(); i++){
+	    mean = mean + set_points[i];
 	  }
 
 	  // Build the centroid
-	  centroid = mean/den;
+	  centroid_ = mean/den;
+	  
+	  }
 	
-	  if(adiacent_polygons_.size() <  points_.size()){
+	  if(adiacent_polygons_.size() <  this->points_.size()){
 	    this->closed_ = false;
 	  }else{
 	    this->closed_ = true;
@@ -145,7 +154,7 @@ namespace fdapde {
 	}
 	void set_adiacent_polygons(std::vector<UInt> adiacent_polygons){
 	  adiacent_polygons_ = adiacent_polygons;
-	  if(adiacent_polygons_.size() <  points_.size()){
+	  if(adiacent_polygons_.size() <  this->points_.size()){
 	    this->closed_ = false;
 	  }else{
 	    this->closed_ = true;
@@ -157,12 +166,12 @@ namespace fdapde {
 	    double result=0;
 	    SVector<3> v1;
 	    SVector<3> v2;
-	    for(auto i=1; i<points_.size()-1; i++){ //from (1,2) to (n-1, n) // CHECK THE FORMULA FOR TRIANGLE IN 3D space!!!!
-	      v1 = points_[i]-points_[0];
-	      v2 = points_[i+1]-points_[i];
+	    for(auto i=1; i<this->points_.size()-1; i++){ //from (1,2) to (n-1, n) // CHECK THE FORMULA FOR TRIANGLE IN 3D space!!!!
+	      v1 = this->points_[i]-this->points_[0];
+	      v2 = this->points_[i+1]-this->points_[i];
 	      result += (v1.cross(v2)).norm();
 	    }
-	    return result;
+	    return result/2;
 	  }else{
 	    return -1; // NO measure is possible if polygon open
 	  }
@@ -178,11 +187,11 @@ namespace fdapde {
 	}
 
 	HyperPlane<2,3> supporting_plane() const {
-	  return HyperPlane<2,3>(points_[0], points_[1], points_[2]); // Build the hyperplan from any three points of ConvexPolygon (at least 3 points always present)
+	  return HyperPlane<2,3>(this->points_[0], this->points_[1], this->points_[2]); // Build the hyperplane from any three points of ConvexPolygon (at least 3 points always present)
 	}
       
 	bool check_Direction (SMatrix<3,2> segment) const {
-	  double value = (segment.col(0)-centroid).cross(segment.col(1)-segment.col(0)).dot((points_[0]-centroid).cross(points_[1] - points_[0]));
+	  double value = (segment.col(0)-this->centroid_).cross(segment.col(1)-segment.col(0)).dot((this->points_[0]-this->centroid_).cross(this->points_[1] - this->points_[0]));
 	  return value > 0;
 	}
       
@@ -198,14 +207,14 @@ namespace fdapde {
 	  std::vector<SVector<3>> O_points;       // Output vertices
 	  std::vector<UInt> O_adiacent_polygons; // Output connectivity vector
         
-	  UInt n = points_.size();
+	  UInt n = this->points_.size();
         
 	  // Prepare data structures
 	  O_points.resize(0);
 	  O_adiacent_polygons.resize(0);
         
 	  // we need to take into account the maximum size
-	  UInt size=0;
+	  // UInt size=0;
         
 	  double offset_0 = 0; // Offset is just the distance with sign with respect to a point
 	  double offset_1 = 0; // Offset is just the distance with sign with respect to a point
@@ -242,11 +251,11 @@ namespace fdapde {
 	      result=true;
 	    }
           
-	    // Case both inside, current on plane and second outside, current inside and the other on plane
-	    if((offset_0 > tol && offset_0 > tol) || (dist_0 < tol && offset_1 > tol) || (offset_0 > tol && dist_1 < tol)){
+	    // Case both inside, current on plane and second inside, current inside and the other on plane
+	    if((offset_0 > tol && offset_1 > tol) || (dist_0 < tol && offset_1 > tol) || (offset_0 > tol && dist_1 < tol)){
 	      O_points.push_back(P0);
-	      O_adiacent_polygons[i]=adiacent_polygons_[i];
-	      size++;
+	      O_adiacent_polygons.push_back(adiacent_polygons_[i]);
+	      //size++;
 	    }
           
 	    // Current in, next out
@@ -254,12 +263,12 @@ namespace fdapde {
 	      // Find intersection
 	      intersection = dist_0 / (dist_0 + dist_1);
 	      O_points.push_back(P0);
-	      O_adiacent_polygons[i]=adiacent_polygons_[i];
-	      size++;
+	      O_adiacent_polygons.push_back(adiacent_polygons_[i]); // i
+	      //size++;
 	      // Add the novel vertex
 	      O_points.push_back(P0+intersection*(P1-P0)); // Add the novel intersection point 
-	      O_adiacent_polygons[i+1]=cut_plane_index;
-	      size++;
+	      O_adiacent_polygons.push_back(cut_plane_index); // i+1
+	      //size++;
 	    }
           
 	    // Current out, next in
@@ -267,16 +276,16 @@ namespace fdapde {
 	      // Find intersection
 	      intersection = dist_0 / (dist_0 + dist_1);
 	      O_points.push_back(P0+intersection*(P1-P0)); // Add the novel intersection point
-	      O_adiacent_polygons[i]=adiacent_polygons_[i];
-	      size++;
+	      O_adiacent_polygons.push_back(adiacent_polygons_[i]); // i
+	      //size++;
 	    }
           
 	    // Case current point is on the plane but the other is out or both on the plane
-	    if((dist_0 < tol && offset_1 < -tol) || (dist_0<tol && dist_1<tol)){ // Current on plane, next out of bound
+	    if((dist_0 < tol && offset_1 < -tol) || (dist_0<tol && dist_1<tol) ){ // Current on plane, next out of bound
 	      // Find intersection
 	      O_points.push_back(P0);
-	      O_adiacent_polygons[i]=cut_plane_index;
-	      size++;
+	      O_adiacent_polygons.push_back(cut_plane_index); // i
+	      //size++;
 	    }  
         
 	    // In the remaining cases: do nothing!
@@ -284,9 +293,13 @@ namespace fdapde {
         
 	  // Update the vertices and the adiacency structure
 	  this->points_ = O_points;
-	  O_adiacent_polygons.resize(size);
+	  //O_adiacent_polygons.resize(size);
 	  this->adiacent_polygons_ = O_adiacent_polygons;
         
+	  if(this->points_.size()==this->adiacent_polygons_.size()){
+	    this->closed_=true;
+	  }
+	  
 	  return result; // There has been a cut, but we still need to handle the case of emplty lists!!!
         
 	}
@@ -304,7 +317,7 @@ namespace fdapde {
 	  std::vector<SVector<3>> O_points; // Output vertices
 	  std::vector<UInt> O_adiacent_polygons; // Output connectivity vector
 
-	  UInt n = points_.size();
+	  UInt n = this->points_.size();
         
 	  // Prepare data structures
 	  O_points.resize(0);
@@ -367,18 +380,18 @@ namespace fdapde {
 	
 	  if(index_begin < index_end){
 	    for(auto i = index_begin; i< index_end +1; i++){
-	      O_points[i-index_begin] = points_[i];
+	      O_points[i-index_begin] = this->points_[i];
 	      O_adiacent_polygons[i-index_begin] = adiacent_polygons_[i];
 	    }
 	  }else{
-	    for(auto i = index_begin; i< points_.size(); i++){
-	      O_points[i-index_begin] = points_[i];
+	    for(auto i = index_begin; i< this->points_.size(); i++){
+	      O_points[i-index_begin] = this->points_[i];
 	      O_adiacent_polygons[i-index_begin] = adiacent_polygons_[i];
 	    }
 
 	    for(auto i = 0; i< index_end+1; i++){
-	      O_points[i+points_.size()-index_begin] = points_[i];
-	      O_adiacent_polygons[i+points_.size()-index_begin] = adiacent_polygons_[i];
+	      O_points[i+this->points_.size()-index_begin] = this->points_[i];
+	      O_adiacent_polygons[i+this->points_.size()-index_begin] = adiacent_polygons_[i];
 	    }
 	  }
 
@@ -393,7 +406,7 @@ namespace fdapde {
 	      iter_adiacent++;
 	    }
 	  }else{
-	    for(auto i = points_.size() - index_begin+index_end+1; i < size; i++ ){
+	    for(auto i = this->points_.size() - index_begin+index_end+1; i < size; i++ ){
 	      O_points[i] = *iter_surf;
 	      O_adiacent_polygons[i] = *iter_adiacent;
 	      iter_surf++;
@@ -407,6 +420,10 @@ namespace fdapde {
 	  this->points_ = O_points;
 	  this->adiacent_polygons_ = O_adiacent_polygons;
         
+	  if(this->points_.size()==this->adiacent_polygons_.size()){
+	    this->closed_=true;
+	  }
+	  
 	  return;
 	} 
   
@@ -416,18 +433,47 @@ namespace fdapde {
 	std::vector<UInt> adiacent_polygons_; // Size = points.rows(). Each element i represents the index of the Polygon adiacent to the segment points(i,...) - points(i+1,...). If the segment is adiacent to infinity, contains -1
 	bool closed_;
 	UInt adiacent_cell_; // index of the adiacent cell in the voronoi or -1 if it is not adiacent to anything, after clipping to surface
-	SVector<3> centroid;
+	SVector<3> centroid_;
       };
       
       // Now I have a set of unsorted segments. I need to transform this into a ConvexPolygon, that is a list of points, ordered counter-clockwise with respect to the centroid
       // To do so, I define the following auxiliary routine
-      ConvexPolygon build_convex_polygon(std::vector<segment> & segments, UInt adiacent_cell, SVector<3> site){
+      ConvexPolygon build_convex_polygon(std::vector<segment> & original_segments, UInt adiacent_cell, SVector<3> site){ // Note: in this case site is right, because we are building just the convexPolygons of the inner cells, therefore, site is not on the Polygon!!!
+	double tol = 0.000000001;
+	
+	// This Convex Polygon will contain the result
+	ConvexPolygon result;
+	
+	std::vector<segment> segments;
+	for(auto i = 0; i < original_segments.size(); i++){
+	  if((original_segments[i].p1 - original_segments[i].p2).norm()>tol){ // Drop the segments too small (it may happen for "Perfect square triangulations")
+	    segments.push_back(original_segments[i]);
+	  }
+	}
+	
 	SVector<3> mean;
-	UInt den = 0;
+	mean[0]=0;
+	mean[1]=0;
+	mean[2]=0;
+	UInt den = 2*segments.size();
+	
+	if(den < 4){ // Degenerate polygon (perfect shape triangulation)
+	  std::vector<SVector<3>> dummy_points;
+	  dummy_points.resize(0);
+	  result.set_points(dummy_points);
+	  
+	  return result; // The polygon will be dropped
+	}else if(((segments[1].p1-segments[1].p2).cross(segments[0].p1-segments[0].p2)).norm()<tol){
+	  // The Polygon is degenerate (at least the first two segmetns), we drop it
+	  std::vector<SVector<3>> dummy_points;
+	  dummy_points.resize(0);
+	  result.set_points(dummy_points);
+	  
+	  return result; // The polygon will be dropped
+	}
 
 	for(auto i = 0; i< segments.size(); i++){
 	  mean = mean + segments[i].p1 + segments[i].p2;
-	  den = den + 2;
 	}
 
 	// Build the centroid
@@ -446,23 +492,34 @@ namespace fdapde {
 	}
 
 	if((v1.cross(v2)).dot(normal) > 0){
-	  final_polygon[0] = segments[0];
+	  final_polygon[M_PI] = segments[0]; // Atan2 goes from -pi to pi
 	}else{
 	  segment seg  = segments[0];
 	  seg.p2 = segments[0].p1;
 	  seg.p1 = segments[0].p2;
-	  final_polygon[0] = seg;
+	  final_polygon[M_PI] = seg;
 	  v1 =  segments[0].p2 - mean;
 	  v2 = -v2;
 	}
+	
+	// normalize v1
+	v1 = v1/v1.norm();
 	  
 	for(auto i = 1; i<segments.size(); i++){
 	  SVector<3> v3 = segments[i].p1 - mean;
 	  SVector<3> v4 = segments[i].p2 - segments[i].p1;
+	  
+	  // normalize (v3)
+	  v3= v3/v3.norm();
 
 	  if((v3.cross(v4)).dot(normal) > 0){ // Segment is already well positioned
-	    // Compute the angle in 360 degrees w.r.t. the original axis
-	    double angle = atan2(normal.dot(v3.cross(v1)),v3.dot(v1)); // Chck with palummo!!
+	    // Compute the angle in rad (counterclockwise) w.r.t. the original axis
+	    double angle = 0;
+	    //if(normal.dot(v1.cross(v3)) > 0){
+	      angle = M_PI + atan2(normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
+	    //}else{
+	      //angle = atan2(-normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
+	    //}
 	    final_polygon[angle] = segments[i];
 	  }else{
 	    segment seg  = segments[i];
@@ -471,8 +528,14 @@ namespace fdapde {
 	    v3 =  segments[i].p2 - mean;
 	    v4 = -v4;
 
-	    double angle = atan2(normal.dot(v3.cross(v1)),v3.dot(v1)); // Chck with palummo!!
-	    final_polygon[angle] = segments[i];
+	    //double angle = atan2(normal.dot(v3.cross(v1)),v3.dot(v1)); // Chck with palummo!!
+	    double angle = 0;
+	    //if(normal.dot(v1.cross(v3)) > 0){
+	      angle = M_PI + atan2(normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
+	    //}else{
+	      //angle = atan2(-normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
+	    //}
+	    final_polygon[angle] = seg;
 	  }
 	}
 
@@ -480,8 +543,8 @@ namespace fdapde {
 	std::vector<SVector<3>> points;
 	std::vector<UInt> adiacent;
 
-	points.resize(segments.size()+1);
-	adiacent.resize(segments.size());
+	points.resize(0);
+	adiacent.resize(0);
 	points.push_back(final_polygon.begin()->second.p1);
 	for(auto iter = final_polygon.begin(); iter!= final_polygon.end(); iter++){
 	  points.push_back(iter->second.p2);
@@ -493,7 +556,7 @@ namespace fdapde {
 	  points.pop_back();
 	}
 
-	ConvexPolygon result;
+        // Fill the result
 	result.set_points(points);
 	result.set_adiacent_polygons(adiacent);
 	result.set_adiacent_cell(adiacent_cell); 
@@ -524,11 +587,11 @@ namespace fdapde {
 
 	for(auto i =0; i<n;i++){
 	  // at least one inside
-	  n_edges_to_cell[i]=1;
+	  n_edges_to_cell[i]=0;
 	}
 
 	// Fill the maps;
-        for(auto edge = mesh_->edges_begin(); edge != mesh_->edges_end(); ++edge){ //
+        for(auto edge = mesh_->edges_begin(); edge != mesh_->edges_end(); ++edge){ // NB each point is counted 
 	  auto P0 = edge->node_ids()(0); //
 	  auto P1 = edge->node_ids()(1); //
 	  UInt edge_id = edge->id(); // This exists;
@@ -537,7 +600,7 @@ namespace fdapde {
 	  n_edges_to_cell[P0]++;
 
 	  edges_to_poly[P1].insert({edge_id,n_edges_to_cell[P1]});
-	  n_edges_to_cell[P0]++;
+	  n_edges_to_cell[P1]++;
 	}
 
 	for(auto i=0;i<n;i++){
@@ -556,100 +619,160 @@ namespace fdapde {
 
 	// Main cycle: we cycle over the faces, and add the appropriate segments to the nodes.
 	// Since we need to employ the information of the tetrahedron used, we need make a cycle based on those.
-	auto tet_0 = mesh_->cells_begin(); // Check with Palummo, syntax
-	auto tet_1 = tet_0;
 
-	// To be modified
-	double M = 
-	  ((nodes_.col(0)).maxCoeff() - (nodes_.col(0)).minCoeff())*((nodes_.col(0)).maxCoeff() - (nodes_.col(0)).minCoeff()) + 
-	  ((nodes_.col(1)).maxCoeff() - (nodes_.col(1)).minCoeff())*((nodes_.col(1)).maxCoeff() - (nodes_.col(1)).minCoeff()) +
-	  ((nodes_.col(2)).maxCoeff() - (nodes_.col(2)).minCoeff())*((nodes_.col(2)).maxCoeff() - (nodes_.col(2)).minCoeff()) ; // max distance in mesh
+	// To be modified: this M is too large, we need something really smaller (because in pratice it will be needed to be half the cell: it could be the circumradius!!!!)
+	double M = 0;
+	  //((nodes_.col(0)).maxCoeff() - (nodes_.col(0)).minCoeff())*((nodes_.col(0)).maxCoeff() - (nodes_.col(0)).minCoeff()) + 
+	  //(((nodes_.col(1)).maxCoeff() - (nodes_.col(1)).minCoeff())*((nodes_.col(1)).maxCoeff() - (nodes_.col(1)).minCoeff()) +
+	  //((nodes_.col(2)).maxCoeff() - (nodes_.col(2)).minCoeff())*((nodes_.col(2)).maxCoeff() - (nodes_.col(2)).minCoeff()) ; // max distance in mesh
 
 	for(auto tet = mesh_->cells_begin(); tet != mesh_->cells_end(); ++tet ){ // Note: we work on the faces of each tetrahedron
 	  
+	  M = tet->circumradius(); // NB part of the inner cell may not touch the border. However, in general works well becaus we only use it as plane and then clip to surface puts everything in order
+	  
+	  SVector<3> tet_mean;
+	  tet_mean[0]=0;
+	  tet_mean[1]=0;
+	  tet_mean[2]=0;
+	  for(auto i=0; i<4;i++){
+	    UInt index = tet->node_ids()[i];
+	    SVector<3> node = nodes_.row(index);
+	    tet_mean = tet_mean + node;
+	  }
+	  tet_mean = tet_mean/4;
+	  
 	  for(auto face = tet->faces_begin(); face != tet->faces_end(); ++face ){ // for each face, do something only if the face hasn't been analyzed yet
-	    if(!analyzed_faces[face->id()]){ // Only if the face hasn't been analyzed yet
+	    
+	    if(analyzed_faces[face->id()] == false){ // Only if the face hasn't been analyzed yet
+	      analyzed_faces[face->id()] == true;
 	      segment seg;
 
 	      if(face->on_boundary()){
 		auto face_plane = face->supporting_plane(); // check with Palummo
 
+                // Check the normal is outgoing or not
+                SVector<3> normal = face_plane.normal();
+                if((tet_mean-face_plane.project(tet_mean)).dot(normal) > 0){ // Normal is ingoing,I want outgoing 
+                  normal = -normal;
+                }
+
 		seg.p1 = tet->circumcenter();
-		seg.p2 = tet->circumcenter() + face_plane.normal()*M; ////// DEFINE M as max of data norm, supposing NORMAL IS OUTGOING, check with palummo!!
+		seg.p2 = tet->circumcenter() + normal*M; ////// Correct when normal is outgoing
 	      }else{
 	        auto neighbors = face->adjacent_cells();
-	        UInt neighbor = neighbors[0];
+	        UInt neighbor = neighbors[1];
 	        if(neighbor == tet->id()){
-	          neighbor = neighbors[1];
+	          neighbor = neighbors[0];
 	        }
-		tet_1 = tet_0 + neighbor; // get the other tet
+		auto tet_1 = mesh_->cells_begin() + neighbor; // get the other tet
 
 		seg.p1 = tet->circumcenter();
 		seg.p2 = tet_1->circumcenter();
 	      }
 
 	      // Now, save the segments in each position
-	      auto e0 = face->edge(face->edge_ids()[0]);
-	      auto e1 = face->edge(face->edge_ids()[1]);
-	      auto e2 = face->edge(face->edge_ids()[2]);
+	      auto e0 = face->edge(0);
+	      auto e1 = face->edge(1);
+	      auto e2 = face->edge(2);
 
-	      auto p0 = e1.node_ids()[0];
-	      auto p1 = e1.node_ids()[1];
-	      auto p2 = e2.node_ids()[0];
+	      auto p0 = e0.node_ids()[0];
+	      auto p1 = e0.node_ids()[1];
+	      auto p2 = e1.node_ids()[0];
 	      
 	      if(p2==p1 || p2==p0){
-	        p2 = e2.node_ids()[1];
+	        p2 = e1.node_ids()[1];
 	      }
 
 	      segment seg_1, seg_2, seg_3, seg_4, seg_5, seg_6;
-	      seg_1 = seg;
-	      seg_1.neighbor = edges_to_poly[p0][e2.id()];
-	      seg_2 = seg;
-	      seg_2.neighbor = edges_to_poly[p0][e0.id()];
-	      seg_3 = seg;
-	      seg_3.neighbor = edges_to_poly[p1][e1.id()];
-	      seg_4 = seg;
-	      seg_4.neighbor = edges_to_poly[p1][e0.id()];
-	      seg_5 = seg;
-	      seg_5.neighbor = edges_to_poly[p2][e2.id()];
-	      seg_6 = seg;
-	      seg_6.neighbor = edges_to_poly[p2][e1.id()];
+	      
+	      if(p0 == e1.node_ids()[0] || p0 == e1.node_ids()[1]){ // p0 opposite to e2
+		seg_1 = seg;
+		seg_1.neighbor = edges_to_poly[p0][e1.id()];
+		seg_2 = seg;
+		seg_2.neighbor = edges_to_poly[p0][e0.id()];
+		seg_3 = seg;
+		seg_3.neighbor = edges_to_poly[p1][e2.id()];
+		seg_4 = seg;
+		seg_4.neighbor = edges_to_poly[p1][e0.id()];
+		seg_5 = seg;
+		seg_5.neighbor = edges_to_poly[p2][e2.id()];
+		seg_6 = seg;
+		seg_6.neighbor = edges_to_poly[p2][e1.id()];
+	      
+		segments[p0][edges_to_poly[p0][e0.id()]].push_back(seg_1);
 
+		segments[p0][edges_to_poly[p0][e1.id()]].push_back(seg_2);
+	      
+		close_cell[p0][edges_to_poly[p0][e0.id()]] = p1;
+		close_cell[p0][edges_to_poly[p0][e1.id()]] = p2;
+	      
+		segments[p1][edges_to_poly[p1][e0.id()]].push_back(seg_3);
+	      
+		segments[p1][edges_to_poly[p1][e2.id()]].push_back(seg_4);
+	      
+		close_cell[p1][edges_to_poly[p1][e0.id()]] = p0;
+		close_cell[p1][edges_to_poly[p1][e2.id()]] = p2;
+	      
+		segments[p2][edges_to_poly[p2][e1.id()]].push_back(seg_5);
+	      
+		segments[p2][edges_to_poly[p2][e2.id()]].push_back(seg_6);
+	      
+		close_cell[p2][edges_to_poly[p2][e2.id()]] = p0;
+		close_cell[p2][edges_to_poly[p2][e1.id()]] = p1;
+              }else{ // p0 opposite to e1
+		seg_1 = seg;
+		seg_1.neighbor = edges_to_poly[p0][e2.id()];
+		seg_2 = seg;
+		seg_2.neighbor = edges_to_poly[p0][e0.id()];
+		seg_3 = seg;
+		seg_3.neighbor = edges_to_poly[p1][e1.id()];
+		seg_4 = seg;
+		seg_4.neighbor = edges_to_poly[p1][e0.id()];
+		seg_5 = seg;
+		seg_5.neighbor = edges_to_poly[p2][e2.id()];
+		seg_6 = seg;
+		seg_6.neighbor = edges_to_poly[p2][e1.id()];
+	      
+		segments[p0][edges_to_poly[p0][e0.id()]].push_back(seg_1);
 
-	      segments[p0][edges_to_poly[p0][e0.id()]].push_back(seg_1);
-
-	      segments[p0][edges_to_poly[p0][e2.id()]].push_back(seg_2);
+		segments[p0][edges_to_poly[p0][e2.id()]].push_back(seg_2);
 	      
-	      close_cell[p0][edges_to_poly[p0][e0.id()]] = p1;
-	      close_cell[p0][edges_to_poly[p0][e2.id()]] = p2;
+		close_cell[p0][edges_to_poly[p0][e0.id()]] = p1;
+		close_cell[p0][edges_to_poly[p0][e2.id()]] = p2;
 	      
-	      segments[p1][edges_to_poly[p1][e0.id()]].push_back(seg_3);
+		segments[p1][edges_to_poly[p1][e0.id()]].push_back(seg_3);
 	      
-	      segments[p1][edges_to_poly[p1][e1.id()]].push_back(seg_4);
+		segments[p1][edges_to_poly[p1][e1.id()]].push_back(seg_4);
 	      
-	      close_cell[p1][edges_to_poly[p1][e0.id()]] = p0;
-	      close_cell[p1][edges_to_poly[p1][e1.id()]] = p2;
+		close_cell[p1][edges_to_poly[p1][e0.id()]] = p0;
+		close_cell[p1][edges_to_poly[p1][e1.id()]] = p2;
 	      
-	      segments[p2][edges_to_poly[p2][e1.id()]].push_back(seg_5);
+		segments[p2][edges_to_poly[p2][e1.id()]].push_back(seg_5);
 	      
-	      segments[p2][edges_to_poly[p2][e2.id()]].push_back(seg_6);
+		segments[p2][edges_to_poly[p2][e2.id()]].push_back(seg_6);
 	      
-	      close_cell[p2][edges_to_poly[p2][e2.id()]] = p0;
-	      close_cell[p2][edges_to_poly[p2][e1.id()]] = p1;
+		close_cell[p2][edges_to_poly[p2][e2.id()]] = p0;
+		close_cell[p2][edges_to_poly[p2][e1.id()]] = p1;
+              }
 	    }
 	  }
 	}
 
 
 	
-	// Final step requires to build the voronoi cells. To be harmonized with the VoronoiCell structure
+	// Final step requires to build the voronoi cells
 	std::vector<CellType> cells;
 	cells.resize(n);
 	for(auto i = 0; i < n; i++){
 	  std::vector<ConvexPolygon> Cell_i;
-	  Cell_i.resize(segments[i].size());
-	  for(auto j = 0; j < segments[i].size();j++){
-	    Cell_i.push_back(build_convex_polygon(segments[i][j],close_cell[i][j], nodes_.row(i))); // Check with Palummo nodes_[i,] for the site, needed for ordering of the normal
+	  // Cell_i.resize(segments[i].size());
+	  for(auto j = 0; j < segments[i].size();j++){ // USE PUSH BACK WITH IF HERE
+	    if(segments[i][j].size()>0){
+	      ConvexPolygon polygon = build_convex_polygon(segments[i][j],close_cell[i][j], nodes_.row(i)); // Check with Palummo nodes_[i,] for the site, needed for ordering of the normal
+	      if(polygon.points().size()!=0){ // The polygon is not degenerate
+	        Cell_i.push_back(polygon);
+	      }
+	    }
 	  }
 	  cells[i].set_inner_faces(Cell_i);
 	  cells[i].set_id(i);
@@ -667,23 +790,24 @@ namespace fdapde {
       // We employ a boolean matrix to avoid to analyze a couple twice
       void cut_surface_to_cells(){
 	// The matrix is needed to avoid double analysis of the same cell-surface_tringle couple
-	DMatrix<bool> incident_set;
+	DMatrix<int> incident_set;
 	
 	// Note: we can extract the info of adiacency by using the surface method of the mesh.
 	// However, we have the problem of treating the map between this surface and the triangles that we use in the normal mesh. However, is this really a problem? Actually no, if we don't need to take care of the underlying tetrahedra ---> but we need to do that!!
 	// Discuss with PALUMMO!!!
 	auto surface_struct_ = mesh_->surface();
 	auto surface_ = surface_struct_.triangulation;
-	auto surface_map_ = surface_struct_.node_map;
+	auto surface_node_map_ = surface_struct_.node_map;
+	auto surface_face_map_ = surface_struct_.face_map;
 	auto surface_iterator = surface_.cells_begin(); // CHECK Syntax with Palummo
-	auto initial_face = surface_iterator;
+	
 	UInt n_faces = surface_.n_cells();
 	UInt n_nodes = mesh_->n_nodes();
 
 	incident_set.resize(n_nodes, n_faces);
 	for(auto i=0; i<n_nodes; i++){
 	  for(auto j=0; j<n_faces; j++){
-	    incident_set(i,j)=false;
+	    incident_set(i,j)=0;
 	  }
 	}
 
@@ -695,28 +819,39 @@ namespace fdapde {
 
 	std::list<incident_cell_face_cuples> FIFO_queue;
 	incident_cell_face_cuples current_couple;
-	current_couple.cell = surface_map_[surface_iterator->node_ids()[0]]; // NBBBBBBB THIS IS THE NODE IDS OF THE SURFACE; IT IS NOT SAID THAT IS OK ALSO FOR THE GLOBAL MESH
+	current_couple.cell = surface_node_map_.at(surface_iterator->node_ids()[0]); // NBBBBBBB THIS IS THE NODE IDS OF THE SURFACE; IT IS NOT SAID THAT IS OK ALSO FOR THE GLOBAL MESH
 	current_couple.face = surface_iterator->id(); // Syntax ceck with Palummo
 	FIFO_queue.push_back(current_couple);
-	incident_set(current_couple.cell, current_couple.face)=true;
+	incident_set(current_couple.cell, current_couple.face)=1;
 
 	// Prepare the structures that will be used to build actually the surfaces, eventually substituted by apposite methods in voronoi cell (push_back in voronoi cell? Little space).
 	std::vector<std::vector<ConvexPolygon>> Surfaces_polygons_collection;
+	Surfaces_polygons_collection.resize(mesh_->n_nodes());
 	
 	// Main construction cycle
 	while(FIFO_queue.size() != 0){
 	  incident_cell_face_cuples actual = FIFO_queue.front();
 	  FIFO_queue.pop_front();
-	  surface_iterator = initial_face + actual.face; // Why not working?
-	  ConvexPolygon triangle_surface(surface_iterator, this->nodes_, surface_map_); // NBBB NOT SAID THAT NODE IDS ARE OK WITH OUR NODES_ !!!!
+	  auto actual_face_iterator = surface_.cells_begin() + actual.face; // Possible problems with iterators plus numbers?
+	  
+	  // Create the tethrahedron mean
+	  SVector<3> tet_mean;
+	  auto close_tet = mesh_->cells_begin() + surface_face_map_.at(actual_face_iterator->id()); // Surface_face_map returns the index of the neighboring tet i nthe original triangulation
+	  for(auto i=0; i<4;i++){
+	    SVector<3> node = nodes_.row(close_tet->node_ids()[i]);
+	    tet_mean = tet_mean + node;
+	  }
+	  tet_mean = tet_mean/4;
+	  
+	  ConvexPolygon triangle_surface(actual_face_iterator, this->nodes_, surface_node_map_, tet_mean); // NBBB NOT SAID THAT NODE IDS ARE OK WITH OUR NODES_ !!!!
 
 	  // Cut against all the planes of the Voronoi cell (use specific routine inside voronoi cell?)
 	  const std::vector<ConvexPolygon> & inner_faces = this->cells_[actual.cell].get_inner_faces();
 	  for(auto i = 0; i<inner_faces.size(); i++){
 	    bool cut = triangle_surface.cut_by_plane(inner_faces[i].supporting_plane(),i);
 	    if(cut){
-	      if(!incident_set(inner_faces[i].adiacent_cell()), actual.face){
-		incident_set(inner_faces[i].adiacent_cell(), actual.face) = true;
+	      if(incident_set(inner_faces[i].adiacent_cell(), actual.face)==0){
+		incident_set(inner_faces[i].adiacent_cell(), actual.face) = 1;
 		current_couple.face = actual.face;
 		current_couple.cell = inner_faces[i].adiacent_cell();
 		FIFO_queue.push_back(current_couple);
@@ -724,13 +859,13 @@ namespace fdapde {
 	    }
 	  }
 
-	  // Finally, if we have still some adiacency with the surface polygons->add the couples actual cell and the close surface
+	  // Finally, if we have still some adi acency with the surface polygons->add the couples actual cell and the close surface
 	  std::vector<UInt> ad_poly = triangle_surface.adiacent_polygons();
 	  for(auto j = 0; j < ad_poly.size(); j++){
 	    if(ad_poly[j]<0){
-	      if(!incident_set(actual.cell, 1-ad_poly[j])){
-		incident_set(actual.cell, 1-ad_poly[j]) = true;
-		current_couple.face = 1-ad_poly[j];
+	      if(incident_set(actual.cell, -1-ad_poly[j])==0){
+		incident_set(actual.cell, -1-ad_poly[j]) = 1;
+		current_couple.face = -1-ad_poly[j];
 		current_couple.cell = actual.cell;
 		FIFO_queue.push_back(current_couple);
 	      }
@@ -738,7 +873,9 @@ namespace fdapde {
 	  }
 
 	  // Finally add the cut surface to the apporpriate zone
-	  Surfaces_polygons_collection[actual.cell].push_back(triangle_surface);
+	  if(triangle_surface.points().size()>2){ // Only if the polygon is not degenerate!!!
+	    Surfaces_polygons_collection[actual.cell].push_back(triangle_surface);
+	  }
 	}
 	
 	// To conclude I need to add the set_surface_faces to each vornoi cell
@@ -817,7 +954,7 @@ namespace fdapde {
 		auto iterator_segments = (cut_segments[i]).begin();
 		auto iterator_adiacent = (cut_indexes[i]).begin();
 		bool found = false;
-		while(iterator_segments != cut_segments[i].end() || !found){
+		while(iterator_segments != cut_segments[i].end() && found == false){
 		    
 		  if((iterator_segments->col(0) - cell_limit.front()).norm() < tol){
 		    cell_limit.push_front(iterator_segments->col(1)); // add the other point
@@ -870,7 +1007,7 @@ namespace fdapde {
 	void set_inner_faces(const std::vector<ConvexPolygon> & InnerFaces){InnerFaces_ = InnerFaces;}
 	void set_surface_faces(const std::vector<ConvexPolygon> & SurfaceFaces){
 	  SurfaceFaces_ = SurfaceFaces;
-	  this->clip_to_surface(); // Clip the innter faces against surface
+	  this->clip_to_surface(); // Clip the inner faces against surface
 
 	  std::vector<UInt> indices_out; // There may exist a Polygon of the cell that needs to be cut out
 	  indices_out.resize(0);
@@ -958,7 +1095,7 @@ namespace fdapde {
       cell_iterator cells_begin() const { return cell_iterator(0, this); }
       cell_iterator cells_end() const { return cell_iterator(n_cells(), this); }
       // perform point location for set of points p_1, p_2, \ldots, p_n
-      DVector<UInt> locate(const DMatrix<double>& locs) const { // NBB NEEDS TO BE MODIFIED BOTH HERE AND BELOW
+      DVector<UInt> locate(const DMatrix<double>& locs) const {
 	fdapde_assert(locs.cols() == embed_dim);
 	// find delanuay cells containing locs
 	DVector<UInt> dual_locs = mesh_->locate(locs);
@@ -969,7 +1106,18 @@ namespace fdapde {
 	  SMatrix<1, Triangulation<3, 3>::n_nodes_per_cell> dist =
 	    (f.nodes().colwise() - locs.row(i).transpose()).colwise().squaredNorm();
 	  UInt min_index;
-	  dist.minCoeff(&min_index);
+	  double min = dist.minCoeff(&min_index);
+	  DVector<int> neighbors = f.neighbors();
+	  for(UInt j = 0; j<neighbors.size(); ++j){ // First level neighbors
+	    typename Triangulation<3, 3>::CellType f_1 = mesh_->cell(neighbors[j]);
+	    SMatrix<1, Triangulation<3, 3>::n_nodes_per_cell> dist_1 =
+	      (f_1.nodes().colwise() - locs.row(i).transpose()).colwise().squaredNorm();
+	    UInt min_index_1;
+	    double min_1 = dist_1.minCoeff(&min_index_1);
+	    if(min_1<min){
+	      min_index = min_index_1;
+	    }
+	  }
 	  dual_locs[i] = f.node_ids()[min_index];
 	}
 	return dual_locs;
@@ -1132,7 +1280,18 @@ template <> class Voronoi<Triangulation<2, 2>> {
             SMatrix<1, Triangulation<2, 2>::n_nodes_per_cell> dist =
               (f.nodes().colwise() - locs.row(i).transpose()).colwise().squaredNorm();
             int min_index;
-            dist.minCoeff(&min_index);
+            double min = dist.minCoeff(&min_index);
+            DVector<int> neighbors = f.neighbors();
+	    for(UInt j = 0; j<neighbors.size(); ++j){ // First level neighbors
+	      typename Triangulation<2, 2>::CellType f_1 = mesh_->cell(neighbors[j]);
+	      SMatrix<1, Triangulation<2, 2>::n_nodes_per_cell> dist_1 =
+	        (f_1.nodes().colwise() - locs.row(i).transpose()).colwise().squaredNorm();
+	      UInt min_index_1;
+	      double min_1 = dist_1.minCoeff(&min_index_1);
+	      if(min_1<min){
+	        min_index = min_index_1;
+	      }
+	    }
             dual_locs[i] = f.node_ids()[min_index];
         }
         return dual_locs;

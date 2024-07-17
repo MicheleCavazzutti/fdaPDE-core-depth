@@ -459,15 +459,22 @@ template <> class Triangulation<3, 3> : public TriangulationBase<3, 3, Triangula
     struct SurfaceReturnType {
         Triangulation<2, 3> triangulation;
         std::unordered_map<int, int> node_map;
+        std::unordered_map<int,int> face_map;
+        SurfaceReturnType() = default;
+        SurfaceReturnType(Triangulation<2, 3> triangulation_, std::unordered_map<int, int> node_map_, std::unordered_map<int,int> face_map_) : triangulation(triangulation_), node_map(node_map_), face_map(face_map_){}
     };
     
     SurfaceReturnType surface() const {
         DMatrix<double> nodes(n_boundary_nodes(), FaceType::n_nodes);
         DMatrix<int> cells(n_boundary_faces(), FaceType::n_nodes), boundary(n_boundary_nodes(), 1);
         std::unordered_map<int, int> node_map;   // bounds node ids in the 3D mesh to rescaled ids on the surface mesh
+        std::unordered_map<int, int> face_map;   // bounds face ids in the 3D mesh to rescaled ids on the surface mesh
         // compute nodes, cells and boundary matrices
         int i = 0, j = 0;
         for (boundary_face_iterator it = boundary_faces_begin(); it != boundary_faces_end(); ++it) {
+            int index = it->adjacent_cells()[0];
+            face_map.insert({i,index});
+            //face_map[i] = index;
             DVector<int> face_nodes = it->node_ids();
             for (int k = 0; k < FaceType::n_nodes; ++k) {
                 int node_id = face_nodes[k];
@@ -477,13 +484,20 @@ template <> class Triangulation<3, 3> : public TriangulationBase<3, 3, Triangula
                     nodes.row(j) = nodes_.row(node_id);
 		    boundary(j, 0) = is_node_on_boundary(node_id);
                     cells(i, k) = j;
-		    node_map[node_id] = j;
+		    node_map.insert({node_id,j});
+		    //node_map[node_id] = j;
 		    j++;
                 }
             }
 	    i++;
         }
-	return {Triangulation<2, 3>(nodes, cells, boundary), fdapde::reverse(node_map)};
+        //SurfaceReturnType result;
+        //Triangulation<2, 3> tri(nodes, cells, boundary);
+        //result.triangulation = tri;
+        //result.node_map = fdapde::reverse(node_map); // ERRRORR
+        //result.face_map = face_map;
+        SurfaceReturnType result(Triangulation<2, 3>(nodes, cells, boundary), fdapde::reverse(node_map), face_map);
+	return result; // {Triangulation<2, 3>(nodes, cells, boundary), fdapde::reverse(node_map), face_map};
     }
 
     // provides the surface triangular mesh of this 3D triangulation
