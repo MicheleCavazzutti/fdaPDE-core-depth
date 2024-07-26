@@ -110,6 +110,11 @@ namespace fdapde {
 	  SVector<3> v1 = nodes_.row(p1)-nodes_.row(p0);
 	  SVector<3> v2 = nodes_.row(p2)-nodes_.row(p0);
 	  
+	  SVector<3> prova = v1.cross(v2);
+	  SVector<3> diff = tet_mean - face->supporting_plane().project(tet_mean);
+	  
+	  double boh = prova.dot(diff);
+	  
 	  if((v1.cross(v2)).dot(tet_mean - face->supporting_plane().project(tet_mean))<0){ // I use the tetrahedron mean to avoid the possible wrong ordering of the normal of the supporting_plane
 	    std::reverse(points.begin(), points.end());
 	    std::reverse(adiacent_faces.begin(), adiacent_faces.end());
@@ -122,7 +127,7 @@ namespace fdapde {
 	  SVector<3> mean = points_[0];
 	  UInt den =this->points_.size(); 
 
-	  for(auto i = 1; i<this->points_.size(); i++){
+	  for(std::size_t i = 1; i<this->points_.size(); i++){
 	    mean = mean + this->points_[i];
 	  }
 	  // Build the centroid
@@ -134,15 +139,15 @@ namespace fdapde {
 	  this->points_ = set_points;
 	  
 	  if(set_points.size() > 0){
-	  UInt den = set_points.size();
-	  SVector<3> mean = set_points[0];
+	    UInt den = set_points.size();
+	    SVector<3> mean = set_points[0];
 
-	  for(auto i = 1; i<set_points.size(); i++){
-	    mean = mean + set_points[i];
-	  }
+	    for(std::size_t i = 1; i<set_points.size(); i++){
+	      mean = mean + set_points[i];
+	    }
 
-	  // Build the centroid
-	  centroid_ = mean/den;
+	    // Build the centroid
+	    centroid_ = mean/den;
 	  
 	  }
 	
@@ -166,7 +171,7 @@ namespace fdapde {
 	    double result=0;
 	    SVector<3> v1;
 	    SVector<3> v2;
-	    for(auto i=1; i<this->points_.size()-1; i++){ //from (1,2) to (n-1, n) // CHECK THE FORMULA FOR TRIANGLE IN 3D space!!!!
+	    for(std::size_t i=1; i<this->points_.size()-1; i++){ //from (1,2) to (n-1, n) // CHECK THE FORMULA FOR TRIANGLE IN 3D space!!!!
 	      v1 = this->points_[i]-this->points_[0];
 	      v2 = this->points_[i+1]-this->points_[i];
 	      result += (v1.cross(v2)).norm();
@@ -210,8 +215,8 @@ namespace fdapde {
 	  UInt n = this->points_.size();
         
 	  // Prepare data structures
-	  O_points.resize(0);
-	  O_adiacent_polygons.resize(0);
+	  //O_points.resize(0);
+	  //O_adiacent_polygons.resize(0);
         
 	  // we need to take into account the maximum size
 	  // UInt size=0;
@@ -247,7 +252,7 @@ namespace fdapde {
 	    offset_1 = (P1 - cut_plane.project(P1)).dot(cut_plane.normal());
 	    dist_1 = std::abs(offset_1);
           
-	    if(offset_0 < 0 && offset_1>0 || offset_0>0 && offset_1 <0 || dist_0 < tol && offset_1 < 0 || dist_1 < tol && offset_0 < 0){
+	    if((offset_0 < 0 && offset_1>0) || (offset_0>0 && offset_1 <0) || (dist_0 < tol && offset_1 < 0) || (dist_1 < tol && offset_0 < 0)){
 	      result=true;
 	    }
           
@@ -320,7 +325,7 @@ namespace fdapde {
 	  UInt n = this->points_.size();
         
 	  // Prepare data structures
-	  O_points.resize(0);
+	  //O_points.resize(0);
         
 	  // we need to take into account the maximum size
 	  UInt size=0;
@@ -333,8 +338,8 @@ namespace fdapde {
         
 	  double tol = 0.0000000001; // To avoid cancellation errors +
 
-	  UInt index_begin;
-	  UInt index_end;
+	  UInt index_begin = 0; // warning: may be used uninitialized
+	  UInt index_end = 0;
 
 	  for(auto i = 0; i<n; i++){
         
@@ -373,46 +378,55 @@ namespace fdapde {
 	    }
         
 	  }
-
-	  size = (index_end - index_begin + 1) + surface_limit.size();
-	  O_points.resize(size);
-	  O_adiacent_polygons.resize(size);
 	
 	  if(index_begin < index_end){
-	    for(auto i = index_begin; i< index_end +1; i++){
-	      O_points[i-index_begin] = this->points_[i];
-	      O_adiacent_polygons[i-index_begin] = adiacent_polygons_[i];
+	    //size = (index_end - index_begin + 1) + surface_limit.size();
+	    //O_points.resize(size);
+	    //O_adiacent_polygons.resize(size);
+	    for(UInt i = index_begin; (i< index_end +1) && (i< this->points_.size()) && (i< this->adiacent_polygons_.size()); i++){ // Extra checks required by Valgrind
+	      O_points.push_back(this->points_[i]);
+	      O_adiacent_polygons.push_back(adiacent_polygons_[i]);
 	    }
 	  }else{
-	    for(auto i = index_begin; i< this->points_.size(); i++){
-	      O_points[i-index_begin] = this->points_[i];
-	      O_adiacent_polygons[i-index_begin] = adiacent_polygons_[i];
+	    //size = (index_begin - index_end + 1) + surface_limit.size();
+	    //O_points.resize(size);
+	    //O_adiacent_polygons.resize(size);
+	    for(UInt i = index_begin; (i< this->points_.size()) && (i< this->adiacent_polygons_.size()); i++){
+	      O_points.push_back(this->points_[i]);
+	      O_adiacent_polygons.push_back(adiacent_polygons_[i]);
 	    }
 
-	    for(auto i = 0; i< index_end+1; i++){
-	      O_points[i+this->points_.size()-index_begin] = this->points_[i];
-	      O_adiacent_polygons[i+this->points_.size()-index_begin] = adiacent_polygons_[i];
+	    for(UInt i = 0; (i< index_end+1) && (i< this->points_.size()) && (i< this->adiacent_polygons_.size()); i++){
+	      O_points.push_back(this->points_[i]);
+	      O_adiacent_polygons.push_back(adiacent_polygons_[i]);
 	    }
 	  }
 
 	  auto iter_surf = surface_limit.begin();
 	  auto iter_adiacent = neighbors.begin();
+	  
+	  for(UInt i =  0; (i < surface_limit.size()) && (i < neighbors.size()); i++ ){
+	      O_points.push_back(*iter_surf);
+	      O_adiacent_polygons.push_back(*iter_adiacent);
+	      iter_surf++;
+	      iter_adiacent++;
+	    }
 
-	  if(index_begin < index_end){
-	    for(auto i =  index_end-index_begin+1; i < size; i++ ){
-	      O_points[i] = *iter_surf;
-	      O_adiacent_polygons[i] = *iter_adiacent;
-	      iter_surf++;
-	      iter_adiacent++;
-	    }
-	  }else{
-	    for(auto i = this->points_.size() - index_begin+index_end+1; i < size; i++ ){
-	      O_points[i] = *iter_surf;
-	      O_adiacent_polygons[i] = *iter_adiacent;
-	      iter_surf++;
-	      iter_adiacent++;
-	    }
-	  }
+	  //if(index_begin < index_end){
+	  //  for(UInt i =  index_end-index_begin+1; i < size; i++ ){
+	  //    O_points[i] = *iter_surf;
+	  //    O_adiacent_polygons[i] = *iter_adiacent;
+	  //    iter_surf++;
+	  //    iter_adiacent++;
+	  //  }
+	  //}else{
+	  //  for(UInt i = this->points_.size() - index_begin+index_end+1; i < size; i++ ){
+	  //    O_points[i] = *iter_surf;
+	  //    O_adiacent_polygons[i] = *iter_adiacent;
+	  //    iter_surf++;
+	  //    iter_adiacent++;
+	  //  }
+	  //}
 
 	
         
@@ -445,7 +459,7 @@ namespace fdapde {
 	ConvexPolygon result;
 	
 	std::vector<segment> segments;
-	for(auto i = 0; i < original_segments.size(); i++){
+	for(UInt i = 0; i < original_segments.size(); i++){
 	  if((original_segments[i].p1 - original_segments[i].p2).norm()>tol){ // Drop the segments too small (it may happen for "Perfect square triangulations")
 	    segments.push_back(original_segments[i]);
 	  }
@@ -459,20 +473,20 @@ namespace fdapde {
 	
 	if(den < 4){ // Degenerate polygon (perfect shape triangulation)
 	  std::vector<SVector<3>> dummy_points;
-	  dummy_points.resize(0);
+	  //dummy_points.resize(0);
 	  result.set_points(dummy_points);
 	  
 	  return result; // The polygon will be dropped
 	}else if(((segments[1].p1-segments[1].p2).cross(segments[0].p1-segments[0].p2)).norm()<tol){
 	  // The Polygon is degenerate (at least the first two segmetns), we drop it
 	  std::vector<SVector<3>> dummy_points;
-	  dummy_points.resize(0);
+	  //dummy_points.resize(0);
 	  result.set_points(dummy_points);
 	  
 	  return result; // The polygon will be dropped
 	}
 
-	for(auto i = 0; i< segments.size(); i++){
+	for(UInt i = 0; i< segments.size(); i++){
 	  mean = mean + segments[i].p1 + segments[i].p2;
 	}
 
@@ -505,7 +519,7 @@ namespace fdapde {
 	// normalize v1
 	v1 = v1/v1.norm();
 	  
-	for(auto i = 1; i<segments.size(); i++){
+	for(UInt i = 1; i<segments.size(); i++){
 	  SVector<3> v3 = segments[i].p1 - mean;
 	  SVector<3> v4 = segments[i].p2 - segments[i].p1;
 	  
@@ -516,9 +530,9 @@ namespace fdapde {
 	    // Compute the angle in rad (counterclockwise) w.r.t. the original axis
 	    double angle = 0;
 	    //if(normal.dot(v1.cross(v3)) > 0){
-	      angle = M_PI + atan2(normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
+	    angle = M_PI + atan2(normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
 	    //}else{
-	      //angle = atan2(-normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
+	    //angle = atan2(-normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
 	    //}
 	    final_polygon[angle] = segments[i];
 	  }else{
@@ -531,9 +545,9 @@ namespace fdapde {
 	    //double angle = atan2(normal.dot(v3.cross(v1)),v3.dot(v1)); // Chck with palummo!!
 	    double angle = 0;
 	    //if(normal.dot(v1.cross(v3)) > 0){
-	      angle = M_PI + atan2(normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
+	    angle = M_PI + atan2(normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
 	    //}else{
-	      //angle = atan2(-normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
+	    //angle = atan2(-normal.dot(v1.cross(v3)),v1.dot(v3)); // Chck with palummo!!
 	    //}
 	    final_polygon[angle] = seg;
 	  }
@@ -543,8 +557,8 @@ namespace fdapde {
 	std::vector<SVector<3>> points;
 	std::vector<UInt> adiacent;
 
-	points.resize(0);
-	adiacent.resize(0);
+	//points.resize(0);
+	//adiacent.resize(0);
 	points.push_back(final_polygon.begin()->second.p1);
 	for(auto iter = final_polygon.begin(); iter!= final_polygon.end(); iter++){
 	  points.push_back(iter->second.p2);
@@ -603,16 +617,16 @@ namespace fdapde {
 	  n_edges_to_cell[P1]++;
 	}
 
-	for(auto i=0;i<n;i++){
+	for(UInt i=0;i<n;i++){
 	  segments[i].resize(n_edges_to_cell[i]);
 	  close_cell[i].resize(n_edges_to_cell[i]);
-	  for (auto j = 0; j < n_edges_to_cell[i]; j++){
-	    segments[i][j].resize(0);
-	  }
+	  //for (UInt j = 0; j < n_edges_to_cell[i]; j++){
+	  //  segments[i][j].resize(0);
+	  //}
 	}
 	
 	analyzed_faces.resize(mesh_->n_faces());
-	for(auto i = 0; i < analyzed_faces.size(); i++){
+	for(std::size_t i = 0; i < analyzed_faces.size(); i++){
 	  analyzed_faces[i]=false;
 	}
 
@@ -622,9 +636,9 @@ namespace fdapde {
 
 	// To be modified: this M is too large, we need something really smaller (because in pratice it will be needed to be half the cell: it could be the circumradius!!!!)
 	double M = 0;
-	  //((nodes_.col(0)).maxCoeff() - (nodes_.col(0)).minCoeff())*((nodes_.col(0)).maxCoeff() - (nodes_.col(0)).minCoeff()) + 
-	  //(((nodes_.col(1)).maxCoeff() - (nodes_.col(1)).minCoeff())*((nodes_.col(1)).maxCoeff() - (nodes_.col(1)).minCoeff()) +
-	  //((nodes_.col(2)).maxCoeff() - (nodes_.col(2)).minCoeff())*((nodes_.col(2)).maxCoeff() - (nodes_.col(2)).minCoeff()) ; // max distance in mesh
+	//((nodes_.col(0)).maxCoeff() - (nodes_.col(0)).minCoeff())*((nodes_.col(0)).maxCoeff() - (nodes_.col(0)).minCoeff()) + 
+	//(((nodes_.col(1)).maxCoeff() - (nodes_.col(1)).minCoeff())*((nodes_.col(1)).maxCoeff() - (nodes_.col(1)).minCoeff()) +
+	//((nodes_.col(2)).maxCoeff() - (nodes_.col(2)).minCoeff())*((nodes_.col(2)).maxCoeff() - (nodes_.col(2)).minCoeff()) ; // max distance in mesh
 
 	for(auto tet = mesh_->cells_begin(); tet != mesh_->cells_end(); ++tet ){ // Note: we work on the faces of each tetrahedron
 	  
@@ -634,7 +648,7 @@ namespace fdapde {
 	  tet_mean[0]=0;
 	  tet_mean[1]=0;
 	  tet_mean[2]=0;
-	  for(auto i=0; i<4;i++){
+	  for(UInt i=0; i<4;i++){
 	    UInt index = tet->node_ids()[i];
 	    SVector<3> node = nodes_.row(index);
 	    tet_mean = tet_mean + node;
@@ -644,7 +658,7 @@ namespace fdapde {
 	  for(auto face = tet->faces_begin(); face != tet->faces_end(); ++face ){ // for each face, do something only if the face hasn't been analyzed yet
 	    
 	    if(analyzed_faces[face->id()] == false){ // Only if the face hasn't been analyzed yet
-	      analyzed_faces[face->id()] == true;
+	      // analyzed_faces[face->id()] == true; // warning: unused-value
 	      segment seg;
 
 	      if(face->on_boundary()){
@@ -766,7 +780,7 @@ namespace fdapde {
 	for(auto i = 0; i < n; i++){
 	  std::vector<ConvexPolygon> Cell_i;
 	  // Cell_i.resize(segments[i].size());
-	  for(auto j = 0; j < segments[i].size();j++){ // USE PUSH BACK WITH IF HERE
+	  for(std::size_t j = 0; j < segments[i].size();j++){ // USE PUSH BACK WITH IF HERE
 	    if(segments[i][j].size()>0){
 	      ConvexPolygon polygon = build_convex_polygon(segments[i][j],close_cell[i][j], nodes_.row(i)); // Check with Palummo nodes_[i,] for the site, needed for ordering of the normal
 	      if(polygon.points().size()!=0){ // The polygon is not degenerate
@@ -798,15 +812,15 @@ namespace fdapde {
 	auto surface_struct_ = mesh_->surface();
 	auto surface_ = surface_struct_.triangulation;
 	auto surface_node_map_ = surface_struct_.node_map;
-	auto surface_face_map_ = surface_struct_.face_map;
+	auto surface_face_map_ = surface_struct_.cell_map;
 	auto surface_iterator = surface_.cells_begin(); // CHECK Syntax with Palummo
 	
 	UInt n_faces = surface_.n_cells();
 	UInt n_nodes = mesh_->n_nodes();
 
 	incident_set.resize(n_nodes, n_faces);
-	for(auto i=0; i<n_nodes; i++){
-	  for(auto j=0; j<n_faces; j++){
+	for(UInt i=0; i<n_nodes; i++){
+	  for(UInt j=0; j<n_faces; j++){
 	    incident_set(i,j)=0;
 	  }
 	}
@@ -836,6 +850,9 @@ namespace fdapde {
 	  
 	  // Create the tethrahedron mean
 	  SVector<3> tet_mean;
+	  tet_mean(0)=0;
+	  tet_mean(1)=0;
+	  tet_mean(2)=0;
 	  auto close_tet = mesh_->cells_begin() + surface_face_map_.at(actual_face_iterator->id()); // Surface_face_map returns the index of the neighboring tet i nthe original triangulation
 	  for(auto i=0; i<4;i++){
 	    SVector<3> node = nodes_.row(close_tet->node_ids()[i]);
@@ -847,7 +864,7 @@ namespace fdapde {
 
 	  // Cut against all the planes of the Voronoi cell (use specific routine inside voronoi cell?)
 	  const std::vector<ConvexPolygon> & inner_faces = this->cells_[actual.cell].get_inner_faces();
-	  for(auto i = 0; i<inner_faces.size(); i++){
+	  for(std::size_t i = 0; i<inner_faces.size(); i++){
 	    bool cut = triangle_surface.cut_by_plane(inner_faces[i].supporting_plane(),i);
 	    if(cut){
 	      if(incident_set(inner_faces[i].adiacent_cell(), actual.face)==0){
@@ -861,7 +878,7 @@ namespace fdapde {
 
 	  // Finally, if we have still some adi acency with the surface polygons->add the couples actual cell and the close surface
 	  std::vector<UInt> ad_poly = triangle_surface.adiacent_polygons();
-	  for(auto j = 0; j < ad_poly.size(); j++){
+	  for(std::size_t j = 0; j < ad_poly.size(); j++){
 	    if(ad_poly[j]<0){
 	      if(incident_set(actual.cell, -1-ad_poly[j])==0){
 		incident_set(actual.cell, -1-ad_poly[j]) = 1;
@@ -901,15 +918,15 @@ namespace fdapde {
 	  cut_indexes.resize(this->InnerFaces_.size());	   
 			
 	  // Now cycle over surface and look for segments we need to cut the inner faces
-	  for(auto j = 0; j < this->SurfaceFaces_.size();j++ ){
+	  for(UInt j = 0; j < this->SurfaceFaces_.size();j++ ){
 	    std::vector<SVector<3>> points = SurfaceFaces_[j].points();
 	    std::vector<UInt> adiacent_polygons = SurfaceFaces_[j].adiacent_polygons();
-	    for(auto k = 0; k < points.size(); k++){
+	    for(UInt k = 0; k < points.size(); k++){
 	      UInt adiacent = adiacent_polygons[k];
 	      if(adiacent>=0){ // NOTE: if < 0 be careful, need to add 1 before abs!!!
 		SMatrix<3,2> segment;
 		segment.col(0) = points[k];
-		if(k==points.size()){
+		if(k==points.size()-1){
 		  segment.col(1) = points[0];
 		}else{
 		  segment.col(1) = points[k+1];
@@ -922,7 +939,7 @@ namespace fdapde {
 		  
 	  // Now we need to sort the segments for each cell cut by the border!!
 	  // Reamark: this implementation can becaome very inefficient for a large number of Internal faces - sruface faces couple, due to push_front. However,in practice  I expect 2-3 intsertions at most
-	  for(auto i = 0; i < this->InnerFaces_.size(); i++){ // Each possible internal face
+	  for(UInt i = 0; i < this->InnerFaces_.size(); i++){ // Each possible internal face
 	    UInt final_size = cut_segments[i].size() + 1;
 	    if(cut_segments[i].size()  > 0){// at least one segment present
 		      
@@ -936,6 +953,9 @@ namespace fdapde {
 	      // Fill with the first segment
 	      SMatrix<3,2> segment = (cut_segments[i]).front();
 	      (cut_segments[i]).pop_front();
+	      
+	      UInt adiacent = (cut_indexes[i]).front();
+	      (cut_indexes[i]).pop_front();
 		      
 	      // Check it is counterclockwise ordered
 	      bool counterclock = InnerFaces_[i].check_Direction(segment); // Check direction missing, we need to implement this!!
@@ -946,6 +966,8 @@ namespace fdapde {
 	      }else{
 		cell_limit.push_front(segment.col(1));
 	      }
+	      
+	      limit_neighbors.push_back(adiacent);
 
 	      UInt current_size=2;
 
@@ -988,8 +1010,8 @@ namespace fdapde {
 	      }
 
 	      // Find the planes associated with extreme segments
-	      const ConvexPolygon * poly_begin = & SurfaceFaces_[1-limit_neighbors.front()]; // 1 - front to transofrm from negative to positive
-	      const ConvexPolygon * poly_end = & SurfaceFaces_[1-limit_neighbors.back()];
+	      const ConvexPolygon * poly_begin = & SurfaceFaces_[-1-limit_neighbors.front()]; // 1 - front to transofrm from negative to positive
+	      const ConvexPolygon * poly_end = & SurfaceFaces_[-1-limit_neighbors.back()];
 		
 	      // Note: the line of segmetns is already orderd in the right direction. Now we need to cut the faces and finally to throw away the faces that are still unlimited
 	      InnerFaces_[i].update_to_surface(cell_limit, limit_neighbors, poly_begin, poly_end);
@@ -1010,16 +1032,16 @@ namespace fdapde {
 	  this->clip_to_surface(); // Clip the inner faces against surface
 
 	  std::vector<UInt> indices_out; // There may exist a Polygon of the cell that needs to be cut out
-	  indices_out.resize(0);
+	  //indices_out.resize(0);
 
-	  for(auto i = 0; i<InnerFaces_.size(); i++){
+	  for(std::size_t i = 0; i<InnerFaces_.size(); i++){
 	    if(!InnerFaces_[i].closed()){
 	      indices_out.push_back(i);
 	    }
 	  }
 
 	  if(indices_out.size()>0){
-	    for(auto i = indices_out.size()-1; i>-1 ;i--){
+	    for(int i = int(indices_out.size()-1); i>-1 ;i--){ // mmhhh... this loop seems strange
 	      InnerFaces_.erase(InnerFaces_.begin()+indices_out[i]); // Throw out the extreme faces (very rare situation, in principle)
 	    }
 	  }
@@ -1033,7 +1055,7 @@ namespace fdapde {
 	double measure() const { // This part is still critical, we will think in futura how to solve it
 	  double volume = 0;
 	  SVector<3> site = v_->nodes_.row(this->id_);
-	  for (UInt i = 0; i < InnerFaces_.size(); ++i) {
+	  for (std::size_t i = 0; i < InnerFaces_.size(); ++i) {
 	    double area = (InnerFaces_[i]).measure();
 	    //SVector<3> site = v_->nodes_[i]; // Check
 	    HyperPlane<2,3> supp_plane = ((InnerFaces_[i]).supporting_plane());
@@ -1041,7 +1063,7 @@ namespace fdapde {
 	    volume = volume + area * sign_dist;
 	  }
             
-	  for (UInt j = 0; j < SurfaceFaces_.size(); ++j) {
+	  for (std::size_t j = 0; j < SurfaceFaces_.size(); ++j) {
 	    double area = (SurfaceFaces_[j]).measure();
 	    //SVector<3> site = v_->nodes_[j]; // Check
 	    HyperPlane<2,3> supp_plane = ((SurfaceFaces_[j]).supporting_plane());
@@ -1051,11 +1073,11 @@ namespace fdapde {
             
 	  return  volume/3;
 	}
-	ConvexPolygon InnerFace(UInt i) const {
+	ConvexPolygon InnerFace(std::size_t i) const {
 	  fdapde_assert(i < InnerFaces_.size());
 	  return InnerFaces_[i];
 	}
-	ConvexPolygon SurfaceFace(UInt i) const {
+	ConvexPolygon SurfaceFace(std::size_t i) const {
 	  fdapde_assert(i < SurfaceFaces_.size());
 	  return SurfaceFaces_[i];
 	}
@@ -1109,13 +1131,15 @@ namespace fdapde {
 	  double min = dist.minCoeff(&min_index);
 	  DVector<int> neighbors = f.neighbors();
 	  for(UInt j = 0; j<neighbors.size(); ++j){ // First level neighbors
-	    typename Triangulation<3, 3>::CellType f_1 = mesh_->cell(neighbors[j]);
-	    SMatrix<1, Triangulation<3, 3>::n_nodes_per_cell> dist_1 =
-	      (f_1.nodes().colwise() - locs.row(i).transpose()).colwise().squaredNorm();
-	    UInt min_index_1;
-	    double min_1 = dist_1.minCoeff(&min_index_1);
-	    if(min_1<min){
-	      min_index = min_index_1;
+	    if(neighbors[j] >= 0){
+	      typename Triangulation<3, 3>::CellType f_1 = mesh_->cell(neighbors[j]);
+	      SMatrix<1, Triangulation<3, 3>::n_nodes_per_cell> dist_1 =
+	        (f_1.nodes().colwise() - locs.row(i).transpose()).colwise().squaredNorm();
+	      UInt min_index_1;
+	      double min_1 = dist_1.minCoeff(&min_index_1);
+	      if(min_1<min){
+	        min_index = min_index_1;
+	      }
 	    }
 	  }
 	  dual_locs[i] = f.node_ids()[min_index];
