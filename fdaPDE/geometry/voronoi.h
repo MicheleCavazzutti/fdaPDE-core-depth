@@ -1439,6 +1439,116 @@ namespace fdapde {
       BinaryVector<fdapde::Dynamic> nodes_markers_;       // i-th element true if i-th vertex is on boundary
       std::unordered_map<UInt, CellType> cells_;   // for each cell id, the associated voronoiCell
     };
+    
+    // CODE UNDER WORK FOR 2.5D
+    template <> class Voronoi<Triangulation<2, 3>> {
+    public:
+      static constexpr int local_dim = Triangulation<2,3>::local_dim;
+      static constexpr int embed_dim = Triangulation<2,3>::embed_dim;
+
+      Voronoi() = default;
+      Voronoi(const Triangulation<2, 3>& mesh) : mesh_(&mesh) {   // constructs voronoi diagram from Delanoy triangulation
+        int n_delaunay_faces = mesh_->n_cells();
+        int n_delaunay_boundary_edges = mesh_->n_boundary_edges();
+        nodes_.resize(1, embed_dim); // Fake nodes
+        nodes_markers_.resize(nodes_.rows()); // Fake nodes_markers
+      }
+
+      // cell data structure
+      class VoronoiCell {
+      private:
+        const Voronoi* v_;
+        int id_ = 0;
+        int n_edges_ = 0;
+      public:
+        VoronoiCell() = default;
+        VoronoiCell(int id, const Voronoi* v) : v_(v), id_(id), n_edges_(0) { }
+        // matrix of edge identifiers
+        DMatrix<int> edges() const {
+	  // This is a fake utility, at the moment is not working
+	  DMatrix<int> result;
+	  return result;
+        }
+        double measure() const {
+	  // Fake utility, measure will be managed upwards by the cpp code!!!
+	  double area = 0;
+	  return 0.5 * std::abs(area);
+        }
+        bool on_boundary() const {
+	  // For the moment this is taylor made only for the sphere
+	  return false;   // no edge on boundary
+        }
+        bool contains(const SVector<embed_dim>& p) const { return v_->locate(p)[0] == id_; }
+      };
+      // getters
+      const DMatrix<double>& sites() const { return mesh_->nodes(); }
+      SVector<embed_dim> site(int id) const { return mesh_->node(id); }
+      const BinaryVector<fdapde::Dynamic>& boundary_vertices() const { return nodes_markers_; }
+      const DMatrix<double>& vertices() const { return nodes_; }
+      const Triangulation<2, 3>& dual() const { return *mesh_; }
+      int n_nodes() const { return nodes_.rows(); }
+      int n_cells() const { return mesh_->n_nodes(); }
+      // compute matrix of edges
+      DMatrix<int> edges() const {
+	// Fake utility for coherence
+        DMatrix<int> result;
+        return result;
+      }
+      using CellType = VoronoiCell;
+      CellType cell(int id) const { return VoronoiCell(id, this); }
+      // iterators
+      class cell_iterator : public index_based_iterator<cell_iterator, CellType> {
+        using Base = index_based_iterator<cell_iterator, CellType>;
+        using Base::index_;
+        friend Base;
+        const Voronoi* voronoi_;
+        cell_iterator& operator()(int i) {
+	  Base::val_ = voronoi_->cell(i);
+	  return *this;
+        }
+      public:
+        cell_iterator(int index, const Voronoi* voronoi) : Base(index, 0, voronoi->n_cells()), voronoi_(voronoi) {
+	  if (index_ < voronoi_->n_cells()) this->val_ = voronoi_->cell(index_);
+        }
+      };
+      cell_iterator cells_begin() const { return cell_iterator(0, this); }
+      cell_iterator cells_end() const { return cell_iterator(n_cells(), this); }
+      // perform point location for set of points p_1, p_2, \ldots, p_n
+      DVector<int> locate(const DMatrix<double>& locs) const {
+        fdapde_assert(locs.cols() == embed_dim);
+        // find delanuay cells containing locs
+        DVector<int> dual_locs = mesh_->locate(locs);
+        for (int i = 0; i < locs.rows(); ++i) {
+	  if (dual_locs[i] == -1) continue;   // location outside domain
+	  // find nearest cell to i-th location
+	  typename Triangulation<2, 3>::CellType f = mesh_->cell(dual_locs[i]);
+	  SMatrix<1, Triangulation<2, 3>::n_nodes_per_cell> dist =
+	    (f.nodes().colwise() - locs.row(i).transpose()).colwise().squaredNorm();
+	  int min_index;
+	  double min = dist.minCoeff(&min_index);
+	  DVector<int> neighbors = f.neighbors(); // Remark: This works great only for a sphere. In a non convex manifold it would be wrong
+	  for(UInt j = 0; j<neighbors.size(); ++j){ // First level neighbors
+	    typename Triangulation<2, 3>::CellType f_1 = mesh_->cell(neighbors[j]);
+	    SMatrix<1, Triangulation<2, 3>::n_nodes_per_cell> dist_1 =
+	      (f_1.nodes().colwise() - locs.row(i).transpose()).colwise().squaredNorm();
+	    UInt min_index_1;
+	    double min_1 = dist_1.minCoeff(&min_index_1);
+	    if(min_1<min){
+	      min_index = min_index_1;
+	    }
+	  }
+	  dual_locs[i] = f.node_ids()[min_index];
+        }
+        return dual_locs;
+      }  
+    private:
+      const Triangulation<2, 3>* mesh_;
+      DMatrix<double> nodes_;                             // voronoi vertices
+      BinaryVector<fdapde::Dynamic> nodes_markers_;       // i-th element true if i-th vertex is on boundary
+      std::unordered_map<int, std::vector<int>> cells_;   // for each cell id, the ids of the vertices composing it
+    };
+    
+    // CODE PALUMMO
 
 
 template <> class Voronoi<Triangulation<2, 2>> {
