@@ -80,21 +80,107 @@ namespace fdapde {
 	  std::vector<SVector<3>> points;
 	  std::vector<UInt> adiacent_faces;
 	  
-	  // manual insertion
-	  for(auto i=0; i<3; i++){ // WRONG
-	    auto edge = face->edge(i);
-	    auto neighbors  = edge.adjacent_cells(); 
+	  UInt p0,p1,p2;
+	  
+	  auto edge_0 = face->edge(0);
+	  auto edge_1 = face->edge(1);
+	  auto edge_2 = face->edge(2);
+	  
+	  p0 = surface_to_mesh.at(edge_0.node_ids()[0]);
+	  p1 = surface_to_mesh.at(edge_0.node_ids()[1]);
+	  
+	  auto neighbors  = edge_0.adjacent_cells(); 
 	    for(auto neigh : neighbors){
 	      if(neigh != face->id()){
 		adiacent_faces.push_back(-1-neigh); // CHECK THAT THERE EXIST ONLY A CLOSE FRIEND
 	      }
 	    }
-	    //adiacent_faces.push_back(-1-neigh); // Negative index to comply with notation of ConvexPolygons
-	  }
+	  
+	  if(edge_1.node_ids()[0] == edge_0.node_ids()[0]){
+	    p2 = surface_to_mesh.at(edge_1.node_ids()[1]);
+	    neighbors  = edge_2.adjacent_cells(); // Needs to be edge 2 because the edges are not sorted!
+	    for(auto neigh : neighbors){
+	      if(neigh != face->id()){
+		adiacent_faces.push_back(-1-neigh); // CHECK THAT THERE EXIST ONLY A CLOSE FRIEND
+	      }
+	    }
 	    
-	  UInt p0 = surface_to_mesh.at(face->node_ids()[0]);
-	  UInt p1 = surface_to_mesh.at(face->node_ids()[1]);
-	  UInt p2 = surface_to_mesh.at(face->node_ids()[2]);
+	    neighbors  = edge_1.adjacent_cells(); // Now we fiinish the adiacent polygons with the adiacenzy of edge 1
+	    for(auto neigh : neighbors){
+	      if(neigh != face->id()){
+		adiacent_faces.push_back(-1-neigh); // CHECK THAT THERE EXIST ONLY A CLOSE FRIEND
+	      }
+	    }
+	  }
+	  
+	  if(edge_1.node_ids()[1] == edge_0.node_ids()[0]){
+	    p2 = surface_to_mesh.at(edge_1.node_ids()[0]);
+	    neighbors  = edge_2.adjacent_cells(); // Needs to be edge 2 because the edges are not sorted!
+	    for(auto neigh : neighbors){
+	      if(neigh != face->id()){
+		adiacent_faces.push_back(-1-neigh); // CHECK THAT THERE EXIST ONLY A CLOSE FRIEND
+	      }
+	    }
+	    
+	    neighbors  = edge_1.adjacent_cells(); // Now we fiinish the adiacent polygons with the adiacenzy of edge 1
+	    for(auto neigh : neighbors){
+	      if(neigh != face->id()){
+		adiacent_faces.push_back(-1-neigh); // CHECK THAT THERE EXIST ONLY A CLOSE FRIEND
+	      }
+	    }
+	  }
+	  
+	  if(edge_1.node_ids()[0] == edge_0.node_ids()[1]){
+	    p2 = surface_to_mesh.at(edge_1.node_ids()[1]);
+	    neighbors  = edge_1.adjacent_cells(); // Needs to be edge 1 because the edges are sorted!
+	    for(auto neigh : neighbors){
+	      if(neigh != face->id()){
+		adiacent_faces.push_back(-1-neigh); // CHECK THAT THERE EXIST ONLY A CLOSE FRIEND
+	      }
+	    }
+	    
+	    neighbors  = edge_2.adjacent_cells(); // Now we fiinish the adiacent polygons with the adiacenzy of edge 2
+	    for(auto neigh : neighbors){
+	      if(neigh != face->id()){
+		adiacent_faces.push_back(-1-neigh); // CHECK THAT THERE EXIST ONLY A CLOSE FRIEND
+	      }
+	    }
+	  }
+	  
+	  
+	  if(edge_1.node_ids()[1] == edge_0.node_ids()[1]){
+	    p2 = surface_to_mesh.at(edge_1.node_ids()[0]);
+	    neighbors  = edge_1.adjacent_cells(); // Needs to be edge 2 because the edges are not sorted!
+	    for(auto neigh : neighbors){
+	      if(neigh != face->id()){
+		adiacent_faces.push_back(-1-neigh); // CHECK THAT THERE EXIST ONLY A CLOSE FRIEND
+	      }
+	    }
+	    
+	    neighbors  = edge_2.adjacent_cells(); // Now we fiinish the adiacent polygons with the adiacenzy of edge 1
+	    for(auto neigh : neighbors){
+	      if(neigh != face->id()){
+		adiacent_faces.push_back(-1-neigh); // CHECK THAT THERE EXIST ONLY A CLOSE FRIEND
+	      }
+	    }
+	  }
+	  
+	  
+	  // manual insertion
+	  //for(auto i=0; i<3; i++){ // WRONG
+	  //  auto edge = face->edge(i);
+	  //  auto neighbors  = edge.adjacent_cells(); 
+	  //  for(auto neigh : neighbors){
+	  //    if(neigh != face->id()){
+	//	adiacent_faces.push_back(-1-neigh); // CHECK THAT THERE EXIST ONLY A CLOSE FRIEND
+	 //     }
+	  //  }
+	    //adiacent_faces.push_back(-1-neigh); // Negative index to comply with notation of ConvexPolygons
+	  //}
+	    
+	  //UInt p0 = surface_to_mesh.at(face->node_ids()[0]);
+	  //UInt p1 = surface_to_mesh.at(face->node_ids()[1]);
+	  //UInt p2 = surface_to_mesh.at(face->node_ids()[2]);
       
 	  //iter++;
 	  
@@ -130,7 +216,7 @@ namespace fdapde {
 	  for(std::size_t i = 1; i<this->points_.size(); i++){
 	    mean = mean + this->points_[i];
 	  }
-	  // Build the centroid
+	  // Build the centroid: Here the polygon is always closed, so it is just the mean of the points
 	  this->centroid_ = mean/den;
 
 	  // RECHEK HERE
@@ -147,7 +233,7 @@ namespace fdapde {
 	    }
 
 	    // Build the centroid
-	    centroid_ = mean/den;
+	    centroid_ = mean/den; // Note: the centroid may fall out of the volume, and therefore we need to perform further checks afterwards.
 	  
 	  }
 	
@@ -192,7 +278,13 @@ namespace fdapde {
 	}
 
 	HyperPlane<2,3> supporting_plane() const {
-	  return HyperPlane<2,3>(this->points_[0], this->points_[1], this->points_[2]); // Build the hyperplane from any three points of ConvexPolygon (at least 3 points always present)
+	UInt i=0;
+	SVector<3> cross = (this->points_[i+1]-this->points_[i]).cross(this->points_[i+2]-this->points_[i+1]);
+	while(i+2<this->points_.size() && cross.norm() < 0.0000000001){
+	  i++;
+	  cross = (this->points_[i+1]-this->points_[i]).cross(this->points_[i+2]-this->points_[i+1]);
+	}
+	  return HyperPlane<2,3>(this->points_[i], this->points_[i+1], this->points_[i+2]); // Build the hyperplane from any three nonlinear points of ConvexPolygon (at least 3 points always present)
 	}
       
 	bool check_Direction (SMatrix<3,2> segment) const {
@@ -309,7 +401,7 @@ namespace fdapde {
         
 	}
 
-	void update_to_surface(std::list<SVector<3>> surface_limit, std::list<UInt> neighbors, const ConvexPolygon * poly_begin, const ConvexPolygon * poly_end){
+	void update_to_surface(std::list<SVector<3>> surface_limit, std::list<UInt> neighbors, const ConvexPolygon * poly_begin, const ConvexPolygon * poly_end, SVector<3> site){ //, const Voronoi* v_){
 	  // To find where to place the list of segments, I just need to cycle and cut by the extremes of the
 	  // the idea is to first compute where is the intersection between the last segment and the sequence (entering), and a the same time computing where is the last intersection between last segment.
 	  // Then, we beed to keep just the inner points and the points of the line!!
@@ -321,11 +413,43 @@ namespace fdapde {
 	  //MOdify sutherland algorithm to find where to cut the elements
 	  std::vector<SVector<3>> O_points; // Output vertices
 	  std::vector<UInt> O_adiacent_polygons; // Output connectivity vector
+	  
+	  if(surface_limit.size() == neighbors.size()){ // We need to drop all of the points altoghether
+	    auto iter_surf = surface_limit.begin();
+	    auto iter_adiacent = neighbors.begin();
+	  
+	    for(UInt i =  0; (i < surface_limit.size()) && (i < neighbors.size()); i++ ){
+	        O_points.push_back(*iter_surf);
+	        O_adiacent_polygons.push_back(*iter_adiacent);
+	        iter_surf++;
+	        iter_adiacent++;
+	     }
+	     
+	     // compute the normal to the new plane and check that it is consistent with notation (pointing to the site)
+	     // Build the supporting plane
+	     HyperPlane<2,3> current_plane(O_points[0], O_points[1], O_points[2]);
+	     
+	     SVector<3> mean = O_points[0];
+	     // Reset centroid_ 
+	     for(UInt l = 1; l < O_points.size(); l++){
+	       mean = mean + O_points[l];
+	     }
+	     this->centroid_ = mean / O_points.size();
+	     
+	     if((current_plane.normal()).dot(site-current_plane.project(site)) < 0){ // The points we are substituting are not well ordered, reverse them // Here there may be a problem if the surface is locally really complex, because the good normal is still not guaranteed (few cells)
+	       std::reverse(O_points.begin(), O_points.end());
+	       std::reverse(O_adiacent_polygons.begin(), O_adiacent_polygons.end());
+	     }
+	     
+	     this->points_ = O_points;
+	     this->adiacent_polygons_ = O_adiacent_polygons;
+	     
+	     this->closed_=true;
+	     
+	     return;
+	  }
 
 	  UInt n = this->points_.size();
-        
-	  // Prepare data structures
-	  //O_points.resize(0);
         
 	  // we need to take into account the maximum size
 	  UInt size=0;
@@ -362,13 +486,13 @@ namespace fdapde {
 	    offset_0_end = (P0 - plane_end.project(P0)).dot( plane_end.normal());
 	    offset_1_end = (P1 - plane_end.project(P1)).dot(plane_end.normal());
           
-	    // Current in, next out from last segment of surface segments
-	    if((offset_0_begin > tol) && (offset_1_begin < -tol)){
+	    // Current in or on border, next out from last segment of surface segments
+	    if((offset_0_begin > tol) && (offset_1_begin < tol)){
 	      index_end = i;
 	    }
           
-	    // Current out, next in from last segment of surface segments
-	    if((offset_0_end < -tol) && (offset_1_end > tol)){
+	    // Current out (or on border), next in from last segment of surface segments
+	    if((offset_0_end < tol) && (offset_1_end > tol)){
 	      if(i<n-1){
 		index_begin = i+1; 
 	      }else{
@@ -378,8 +502,85 @@ namespace fdapde {
 	    }
         
 	  }
+	  
+	  // Check that the cell limit is well ordered with respect to the ConvexPolygon --> we need to compute a pseudo centroid_ that is guaranteed to be inside the polygon
+	  SVector<3> point_inside = this->points_[index_end]; // this point is guaranteed to be inside
+	  
+	  auto iter_limit = surface_limit.begin();
+	  SVector<3> point_0, point_1;
+	  point_0 = *iter_limit;
+	  iter_limit++;
+	  point_1 = *iter_limit;
+	  
+	  bool well_positioned = ((points_[1] - points_[0]).cross(points_[2]-points_[1])).dot((point_0-point_inside).cross(point_1-point_0)) > 0; //if greater than zero, then the original segment was ok and consequently all the cell limit is ok
+	  
+	  if(!well_positioned){ // Reverse everything, recompute index begin, index_end
+	    std::reverse(surface_limit.begin(), surface_limit.end());
+	    std::reverse(neighbors.begin(), neighbors.end());
+	    
+	    plane_begin = poly_end->supporting_plane(); // Switch the supporting planes
+	    plane_end = poly_begin->supporting_plane(); // Switch the supporting planes
+	    
+	    // Recompute the index_begin and index_end, they CANNOT be inferred by the wrong ones!!!
+	    for(auto i = 0; i<n; i++){
+        
+	    // Extract the current couple under analysis
+	    SVector<3> P0 = this->points_[i];
+	    SVector<3> P1 = P0;
+          
+	    // Take care of the last point
+	    if(i==(n-1)){
+	      P1 = this->points_[0];
+	    }else{
+	      P1 = this->points_[i+1];
+	    }  
+          
+	    // distances from begin
+	    offset_0_begin = (P0 - plane_begin.project(P0)).dot(plane_begin.normal());
+	    offset_1_begin = (P1 - plane_begin.project(P1)).dot(plane_begin.normal());
+          
+	    // distances from end
+	    offset_0_end = (P0 - plane_end.project(P0)).dot( plane_end.normal());
+	    offset_1_end = (P1 - plane_end.project(P1)).dot(plane_end.normal());
+          
+	    // Current in or on border, next out from last segment of surface segments
+	    if((offset_0_begin > tol) && (offset_1_begin < tol)){
+	      index_end = i;
+	    }
+          
+	    // Current out (or on border), next in from last segment of surface segments
+	    if((offset_0_end < tol) && (offset_1_end > tol)){
+	      if(i<n-1){
+		index_begin = i+1; 
+	      }else{
+		index_begin = 0;
+	      }
+	    
+	    }
+        
+	  }
+	  }
+	  
+	  // Note: since the cell limit may have been ordered in a bad way, it may happen that we need to reverse the problem. If the ordering was right, the first point that we keep in should be inside the domain, not out. We check this by locate
+	  //if(v_->locate_in_mesh(this->points_[index_begin])[0] == -1){ // The point is out, the cell limit was badly sorted
+	  //  std::reverse(surface_limit.begin(), surface_limit.end());
+	  //  std::reverse(neighbors.begin(), neighbors.end());
+	  //  UInt aux_begin = index_begin;
+	  //  UInt aux_end = index_end;
+	  //  if(aux_begin == 0){
+	  //    index_end = this->points_.size()-1;
+	  //  }else{
+	  //    index_end = aux_begin-1;
+	  //  }
+	    
+	  //  if(aux_end == this->points_.size()-1){
+	  //    index_begin = 0;
+	  //  }else{
+	  //    index_begin = aux_end+1;
+	  //  }
+	  //}
 	
-	  if(index_begin < index_end){
+	  if(index_begin <= index_end){
 	    //size = (index_end - index_begin + 1) + surface_limit.size();
 	    //O_points.resize(size);
 	    //O_adiacent_polygons.resize(size);
@@ -411,6 +612,16 @@ namespace fdapde {
 	      iter_surf++;
 	      iter_adiacent++;
 	    }
+	    
+	  // Add the last point, since neighbors has always a lower dimension with respect to surface_limit.size()
+	  O_points.push_back(*iter_surf); // Iter surf is already at the last position
+	    
+	  // Add the neighbor related to the last surface segment, missing from surfaces (it is the one related to the segment entering in the volume, lost when inserting points)
+	  if(index_begin > 0){
+	    O_adiacent_polygons.push_back(adiacent_polygons_[index_begin-1]);
+	  }else{
+	    O_adiacent_polygons.push_back(adiacent_polygons_.back());
+	  }
 
 	  //if(index_begin < index_end){
 	  //  for(UInt i =  index_end-index_begin+1; i < size; i++ ){
@@ -478,7 +689,7 @@ namespace fdapde {
 	  
 	  return result; // The polygon will be dropped
 	}else if(((segments[1].p1-segments[1].p2).cross(segments[0].p1-segments[0].p2)).norm()<tol){
-	  // The Polygon is degenerate (at least the first two segmetns), we drop it
+	  // The Polygon is degenerate (at least the first two segments), we drop it
 	  std::vector<SVector<3>> dummy_points;
 	  //dummy_points.resize(0);
 	  result.set_points(dummy_points);
@@ -494,7 +705,7 @@ namespace fdapde {
 	mean = mean/den; 
 
 	// Auxiliary structure used to build the sorted set of points. The key will be the angle with respect the centroid - first point of the polygon
-	std::map<double,segment> final_polygon;
+	std::map<double,segment> final_polygon, auxiliary_map;
 
 	SVector<3> v1 = segments[0].p1 - mean;
 	SVector<3> v2 = segments[0].p2 - segments[0].p1;
@@ -552,7 +763,61 @@ namespace fdapde {
 	    final_polygon[angle] = seg;
 	  }
 	}
+	
+	// Drop the double segments due to numerical errors
+	double tolerance_angle = 0.00000001;
+	auto iter_0 = final_polygon.begin();
+	auto iter_1 = iter_0;
+	iter_1++;
+	std::vector<double> removal_set; // Set of keys to be removed due to duplication induced by numerical tolerances
+	while(iter_1!=final_polygon.end()){
+	  if(iter_1->first - iter_0->first < tolerance_angle){
+	    removal_set.push_back(iter_1->first);
+	  }
+	  iter_0++;
+	  iter_1++;
+	}
+	
+	for(UInt k = 0; k < removal_set.size(); k++ ){
+	  final_polygon.erase(removal_set[k]); // Delete the duplicates#31 0x00007ffff7b5419d in ?? () from /usr/lib/R/lib/libR.so
 
+	}
+	
+	if(final_polygon.rbegin()->first - final_polygon.begin()->first > 2*M_PI - tol){ // Also remove the last segmetn if it is too close to the first!
+	  final_polygon.erase(final_polygon.rbegin()->first);
+	}
+	
+	// Sort the final polygon map to handle well the case of infinite segments without adiacency
+	iter_0 = final_polygon.begin();
+	iter_1 = iter_0;
+	iter_1++; //at least two segments!
+	bool found=false;
+	while(iter_1!= final_polygon.end() && found == false){
+	  if((iter_0->second.p2 - iter_1->second.p1).norm() > 0.000005){ // we found two infinite segments not matching, we need to sort again the map with respect to the iter_1
+	    found=true;
+	  }else{
+	    iter_0++;
+	    iter_1++;
+	  }
+	}
+
+        if(found==true){
+          double counter = 0;
+          
+          for(auto iter = iter_1; iter!= final_polygon.end(); iter++){
+            auxiliary_map[counter] = iter->second;
+            counter = counter +1;
+          }
+
+          for(auto iter = final_polygon.begin(); iter!= iter_1; iter++){
+            auxiliary_map[counter] = iter->second;
+            counter = counter +1;
+          }
+          
+          final_polygon = auxiliary_map;
+        }
+        
+        
 	// Finally build the actual polygon
 	std::vector<SVector<3>> points;
 	std::vector<UInt> adiacent;
@@ -662,7 +927,7 @@ namespace fdapde {
 	      segment seg;
 
 	      if(face->on_boundary()){
-		auto face_plane = face->supporting_plane(); // check with Palummo
+		auto face_plane = face->supporting_plane(); 
 
                 // Check the normal is outgoing or not
                 SVector<3> normal = face_plane.normal();
@@ -897,7 +1162,7 @@ namespace fdapde {
 	
 	// To conclude I need to add the set_surface_faces to each vornoi cell
 	for(auto i = 0; i < this->nodes_.rows(); i++){
-	  this->cells_[i].set_surface_faces(Surfaces_polygons_collection[i]);
+	  this->cells_[i].set_surface_faces(Surfaces_polygons_collection[i], this->nodes_.row(i));
 	}
       }
 	      
@@ -909,7 +1174,7 @@ namespace fdapde {
 	std::vector<ConvexPolygon> InnerFaces_; // Set when unconstrained Voronoi is built   // New
 	std::vector<ConvexPolygon> SurfaceFaces_; // Set with Yan's algorithm
 		
-	void clip_to_surface(){ // This methods clips the Inner Polygons (that may go out of the surface) to surface limits. This implementation relies on the adiacent polygons of the surface polygons.
+	void clip_to_surface(SVector<3> site){ // This methods clips the Inner Polygons (that may go out of the surface) to surface limits. This implementation relies on the adiacent polygons of the surface polygons.
 	  // STEP 1: find segments of interest
 	  std::vector<std::list<SMatrix<3,2>>> cut_segments; // This vector contains the segments to cut each Polygon, obtained by the surfaces cells;
 	  std::vector<std::list<UInt>> cut_indexes; // This vector contains the indexes of the cells corresponding to the cut we are prforming on the surface (to provide the final adiacency)
@@ -945,11 +1210,18 @@ namespace fdapde {
 		      
 	      // Tolerance for equivalence // Check with Palummo
 	      double tol = 0.0000001;
-		      
+		
+	      UInt number_of_borders = 0;
+	      bool finished_local_border = false;
+	      
+	      while(cut_segments[i].size()!=0 && cut_indexes[i].size()!=0 ){	// It may happen that the same polygon may be subject to two distinct borders, related t two different surfaces
+	      
+	      number_of_borders++; // Increment the number of borders analyzed      
+	       
 	      // Create a vector of sorted points:
 	      std::list<SVector<3>> cell_limit;
 	      std::list<UInt> limit_neighbors;
-		      
+	      
 	      // Fill with the first segment
 	      SMatrix<3,2> segment = (cut_segments[i]).front();
 	      (cut_segments[i]).pop_front();
@@ -968,10 +1240,10 @@ namespace fdapde {
 	      }
 	      
 	      limit_neighbors.push_back(adiacent);
+	      
+	      finished_local_border = false;
 
-	      UInt current_size=2;
-
-	      while(current_size < final_size){
+	      while(cut_segments[i].size()!=0 && cut_indexes[i].size()!=0 && !finished_local_border){
 
 		auto iterator_segments = (cut_segments[i]).begin();
 		auto iterator_adiacent = (cut_indexes[i]).begin();
@@ -981,40 +1253,55 @@ namespace fdapde {
 		  if((iterator_segments->col(0) - cell_limit.front()).norm() < tol){
 		    cell_limit.push_front(iterator_segments->col(1)); // add the other point
 		    limit_neighbors.push_front(*iterator_adiacent);
+		    cut_segments[i].erase(iterator_segments);
+		    cut_indexes[i].erase(iterator_adiacent);
 		    found=true;
-		  }
-		  if((iterator_segments->col(1) - cell_limit.front()).norm() < tol){
+		  }else if((iterator_segments->col(1) - cell_limit.front()).norm() < tol){
 		    cell_limit.push_front(iterator_segments->col(0)); // add the other point
 		    limit_neighbors.push_front(*iterator_adiacent);
+		    cut_segments[i].erase(iterator_segments);
+		    cut_indexes[i].erase(iterator_adiacent);
 		    found=true;
-		  }
-		  if((iterator_segments->col(0) - cell_limit.back()).norm() < tol){
+		  }else if((iterator_segments->col(0) - cell_limit.back()).norm() < tol){
 		    cell_limit.push_back(iterator_segments->col(1)); // add the other point
 		    limit_neighbors.push_back(*iterator_adiacent);
+		    cut_segments[i].erase(iterator_segments);
+		    cut_indexes[i].erase(iterator_adiacent);
 		    found=true;
-		  }
-		  if((iterator_segments->col(1) - cell_limit.back()).norm() < tol){
+		  }else if((iterator_segments->col(1) - cell_limit.back()).norm() < tol){
 		    cell_limit.push_back(iterator_segments->col(0)); // add the other point
 		    limit_neighbors.push_back(*iterator_adiacent);
+		    cut_segments[i].erase(iterator_segments);
+		    cut_indexes[i].erase(iterator_adiacent);
 		    found=true;
 		  }
 		    
 		  if(!found){
 		    iterator_segments++;
 		    iterator_adiacent++;
-		  }else{
-		    current_size++;
 		  }
 		}
 
+              if(found ==false ){ // We didn't find anything, so the actual border is finished. We need to close the cycle or analyze another border
+                finished_local_border = true;
+              }
+
+	      }
+	      
+	      if((cell_limit.front() - cell_limit.back()).norm()<tol){
+	        // remove the last point and the last adiacent polygon due to repetition;
+	        cell_limit.pop_back(); // Note: now cell limit and limit neighbors have the same size which needs to be handled by the update to surface method
 	      }
 
 	      // Find the planes associated with extreme segments
 	      const ConvexPolygon * poly_begin = & SurfaceFaces_[-1-limit_neighbors.front()]; // 1 - front to transofrm from negative to positive
 	      const ConvexPolygon * poly_end = & SurfaceFaces_[-1-limit_neighbors.back()];
+	      
+	      //SVector<3> site = v_->site(this->id_);
 		
 	      // Note: the line of segmetns is already orderd in the right direction. Now we need to cut the faces and finally to throw away the faces that are still unlimited
-	      InnerFaces_[i].update_to_surface(cell_limit, limit_neighbors, poly_begin, poly_end);
+	      InnerFaces_[i].update_to_surface(cell_limit, limit_neighbors, poly_begin, poly_end, site);//, v_);
+	    }
 	    }
 	    // MISSING (and probably will not be implemented)
 	    // InnerFaces_[i].erase_out_of_bound(); // Note: we need to erase the polygons that are still infinite (i.e. case with two or one circumcenter out of surface and ramaining missing)
@@ -1027,9 +1314,9 @@ namespace fdapde {
 	VoronoiCell(UInt id, const Voronoi* v) : v_(v), id_(id), InnerFaces_(v_->cells_.at(id_).get_inner_faces()), SurfaceFaces_(v_->cells_.at(id_).get_surface_faces()){} 
 	void set_id(UInt id){id_=id;}
 	void set_inner_faces(const std::vector<ConvexPolygon> & InnerFaces){InnerFaces_ = InnerFaces;}
-	void set_surface_faces(const std::vector<ConvexPolygon> & SurfaceFaces){
+	void set_surface_faces(const std::vector<ConvexPolygon> & SurfaceFaces, SVector<3> site){
 	  SurfaceFaces_ = SurfaceFaces;
-	  this->clip_to_surface(); // Clip the inner faces against surface
+	  this->clip_to_surface(site); // Clip the inner faces against surface
 
 	  std::vector<UInt> indices_out; // There may exist a Polygon of the cell that needs to be cut out
 	  //indices_out.resize(0);
