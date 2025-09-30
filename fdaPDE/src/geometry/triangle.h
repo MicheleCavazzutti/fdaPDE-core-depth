@@ -65,7 +65,6 @@ template <typename Triangulation> class Triangle : public Simplex<Triangulation:
     Eigen::Matrix<int, Dynamic, 1> node_ids() const { return mesh_->cells().row(id_); }
     Eigen::Matrix<int, Dynamic, 1> edge_ids() const { return mesh_->cell_to_edges().row(id_); }
     bool on_boundary() const { return boundary_; }
-    DVector<int> edge_ids() const { return mesh_->cell_to_edges().row(id_); }
     operator bool() const { return mesh_ != nullptr; }
     EdgeType edge(int n) const {
         fdapde_assert(n < this->n_edges);
