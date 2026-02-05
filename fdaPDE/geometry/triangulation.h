@@ -135,6 +135,63 @@ template <int M, int N, typename Derived> class TriangulationBase {
     boundary_node_iterator boundary_nodes_end() const {
         return boundary_node_iterator(n_nodes_, static_cast<const Derived*>(this));
     }
+  std::vector<int> node_one_ring(int node_id) const {
+    std::vector<int> incident_cells =
+      static_cast<const Derived&>(*this).node_patch(node_id);
+    
+    std::unordered_set<int> one_ring;
+    one_ring.reserve(incident_cells.size() * n_nodes_per_cell);
+    
+    for (int cell_id : incident_cells)
+      for (int i = 0; i < n_nodes_per_cell; ++i)
+	one_ring.insert(cells_(cell_id, i));
+    
+    return {one_ring.begin(), one_ring.end()};
+  }
+  std::vector<int> node_k_ring(int node_id, int k) const {
+    if (k < 0) return {};
+    if (k == 0) return {node_id};
+    
+    std::unordered_set<int> visited;
+    visited.insert(node_id);
+    
+    std::vector<int> current_frontier{node_id};
+    std::vector<int> next_frontier;
+    
+    for (int level = 0; level < k; ++level) {
+      next_frontier.clear();
+      
+      for (int nid : current_frontier) {
+	// Use your existing one-ring routine
+	std::vector<int> neigh = node_one_ring(nid);
+            for (int v : neigh) {
+	      if (!visited.count(v)) {
+		visited.insert(v);
+		next_frontier.push_back(v);
+                }
+            }
+      }
+
+      current_frontier.swap(next_frontier);
+      
+      if (current_frontier.empty()) break; // isolated region
+    }
+    
+    return {visited.begin(), visited.end()};
+  }
+
+  std::vector<int> node_k_patch(int node_id, int k) const {
+    std::vector<int> nodes = node_k_ring(node_id, k-1);
+    
+    std::unordered_set<int> cells;
+    for (int n : nodes) {
+      auto patch = static_cast<const Derived&>(*this).node_patch(n);
+        cells.insert(patch.begin(), patch.end());
+    }
+    
+    return {cells.begin(), cells.end()};
+  }
+  
    protected:
     DMatrix<double> nodes_ {};                         // physical coordinates of mesh's vertices
     DMatrix<int, Eigen::RowMajor> cells_ {};           // nodes (as row indexes in nodes_ matrix) composing each cell
